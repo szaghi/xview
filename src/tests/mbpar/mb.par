@@ -1,0 +1,33 @@
+'./CC/cc'                         radice file reticolo
+'INI-06/kde_00'                   tipo condizioni iniziali
+'./CC/cc'                         radice file condizioni contorno
+'nessuno'                         file definizione corpo
+'nessuno'                         file dinamica
+'./RST-06/kde'                    file restart
+'./Log-06/'                       file evoluzione e residui
+20 20 20                          max.cicli   max.cicli.sg    frequenza.mem
+4   1   1                         numero di sott. - gr. iniziale - simulacro
+3   0  2.00d0
+3   0  2.00d0
+3   0  2.00d0
+3   0  2.00d0
+0.  0.   0.                       epsi epsj epsk
+1                                 numero di Stadi Runge-Kutta nrk
+1.0                               alfa(1)  alfa(2) ...  alfa(nrk)
+'CE4'  6                          discretizzazione flussi conv. (TVD o CENTRATI)
+1.0d0     0.25d0                  viscosità artificiale campo + sup.lib. LS
+0.2d0                             rilassamento viscosità turbolenta
+1.0d-4                            residuo tollerabile
+0.40d0  50                        fattore di stabiita' per la funzione di livello
+1.0d0     3.0d0                   fattore di pseudocompressibilita'
+0.8d5   1.0d-3                    numero di Reynolds  spessbl
+-5.13E-01  -1.34761d2             numero di Froude e di Weber
+0.0  0.0  0.0                     uinf,vinf,winf
+'DES'                             modello di turbolenza
+0.25d0                            rilassamento estrap. aria LS
+0.07073170732d0                   quota superficie libera
+0                                 n. dischi attuatori
+10d0                              Forzante Chimera
+1.0020735d-1  2.0d10 1.0d0  1.0d0 dt tmax tsg tempo0
+0d0    0d0  0.0d0  0.5d0          kxwave kywave hwave hbott
+0.0d0 -1.0d0
