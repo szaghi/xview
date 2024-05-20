@@ -13,3 +13,6 @@
 [submodule "src/third_party/BeFoR64"]
 	path = src/third_party/BeFoR64
 	url = https://github.com/szaghi/BeFoR64
+[submodule "src/third_party/VecFor"]
+	path = src/third_party/VecFor
+	url = https://github.com/szaghi/VecFor

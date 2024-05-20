@@ -1,5 +1,5 @@
 !< xview, mb.par class definition.
-module xview_mbpar_object
+module xview_file_mbpar_object
 !< xview, mb.par class definition.
 
 use penf
@@ -7,9 +7,9 @@ use stringifor
 
 implicit none
 private
-public :: mbpar_object
+public :: file_mbpar_object
 
-type :: mbpar_object
+type :: file_mbpar_object
    !< mb.par class definition.
    type(string) :: filename           !< Filename, mb.par generally, but it is customizable.
    type(string) :: basename_grd       !< Basename of grid files.
@@ -27,15 +27,15 @@ type :: mbpar_object
       procedure, pass(self) :: destroy         !< Destroy dynamic memory.
       procedure, pass(self) :: is_file_present !< Inquire if the file path is valid.
       procedure, pass(self) :: load_file       !< Load mb.par file data.
-endtype mbpar_object
+endtype file_mbpar_object
 
 contains
    ! public methods
    pure function description(self) result(desc)
    !< Return a pretty-formatted object description.
-   class(mbpar_object), intent(in) :: self             !< File data.
-   character(len=:), allocatable   :: desc             !< Description.
-   character(len=1), parameter     :: NL=new_line('a') !< New line character.
+   class(file_mbpar_object), intent(in) :: self             !< File data.
+   character(len=:), allocatable        :: desc             !< Description.
+   character(len=1), parameter          :: NL=new_line('a') !< New line character.
 
    if (self%is_loaded) then
       desc =       self%filename//' parsed data:'//NL
@@ -54,7 +54,7 @@ contains
 
    elemental subroutine destroy(self)
    !< Destroy dynamic memory.
-   class(mbpar_object), intent(inout) :: self !< File data.
+   class(file_mbpar_object), intent(inout) :: self !< File data.
 
    call self%filename%free
    call self%basename_grd%free
@@ -70,8 +70,8 @@ contains
 
    function is_file_present(self) result(is_present)
    !< Inquire if the file path is valid.
-   class(mbpar_object), intent(in) :: self       !< File data.
-   logical                         :: is_present !< Inquiring result.
+   class(file_mbpar_object), intent(in) :: self       !< File data.
+   logical                              :: is_present !< Inquiring result.
 
    is_present = .false.
    if (self%filename/='') inquire(file=trim(adjustl(self%filename)), exist=is_present)
@@ -79,14 +79,14 @@ contains
 
    subroutine load_file(self, path, filename)
    !< Load mb.par file data.
-   class(mbpar_object), intent(inout)        :: self          !< File data.
-   character(*),        intent(in), optional :: path          !< Path to mb.par.
-   character(*),        intent(in), optional :: filename      !< File name of mb.par, optionally customizable.
-   character(:), allocatable                 :: path_         !< Path to mb.par, local variable.
-   character(:), allocatable                 :: filename_     !< File name of mb.par, local varibale
-   type(string)                              :: mbpar_str     !< mb.par parsing string.
-   type(string), allocatable                 :: mbpar_rows(:) !< mb.par rows.
-   integer(I4P)                              :: gln           !< Grid levels number.
+   class(file_mbpar_object), intent(inout)        :: self          !< File data.
+   character(*),             intent(in), optional :: path          !< Path to mb.par.
+   character(*),             intent(in), optional :: filename      !< File name of mb.par, optionally customizable.
+   character(:), allocatable                      :: path_         !< Path to mb.par, local variable.
+   character(:), allocatable                      :: filename_     !< File name of mb.par, local varibale
+   type(string)                                   :: mbpar_str     !< mb.par parsing string.
+   type(string), allocatable                      :: mbpar_rows(:) !< mb.par rows.
+   integer(I4P)                                   :: gln           !< Grid levels number.
 
    path_     = ''       ; if (present(path    )) path_     = trim(adjustl(path))
    filename_ = 'mb.par' ; if (present(filename)) filename_ = trim(adjustl(filename))
@@ -138,4 +138,4 @@ contains
       var_r = columns(n)%to_number(kind=1._R8P)
    endif
    endsubroutine get_token
-endmodule xview_mbpar_object
+endmodule xview_file_mbpar_object

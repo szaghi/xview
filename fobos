@@ -15,6 +15,7 @@ $EXDIRS      = PENF/src/tests
                StringiFor/src/tests StringiFor/src/third_party
                BeFoR64/src/tests BeFoR64/src/third_party
                FACE/src/tests FACE/src/third_party
+               VecFor/src/tests VecFor/src/third_party
 
 # main modes
 # GNU
