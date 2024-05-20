@@ -13,14 +13,15 @@ integer(I4P), parameter :: MAX_CHAR_LENGTH=999 !< Maximum length of strings.
 
 type :: ui_object
    !< UI class definition.
-   type(command_line_interface) :: cli            !< Command line interface handler.
-   character(MAX_CHAR_LENGTH)   :: mbpar_filename !< mb.par file name.
-   character(MAX_CHAR_LENGTH)   :: mbpar_path     !< Path to mb.par file.
+   type(command_line_interface) :: cli                !< Command line interface handler.
+   character(MAX_CHAR_LENGTH)   :: ipath              !< Path to mb.par file.
+   character(MAX_CHAR_LENGTH)   :: procinput_filename !< proc.input file name.
+   character(MAX_CHAR_LENGTH)   :: mbpar_filename     !< mb.par file name.
    contains
       ! public methods
       procedure, pass(self) :: parse_cli !< Parse command line interface.
       ! private methods
-      procedure, pass(self) :: set_cli !< Set command line interface.
+      procedure, pass(self), private :: set_cli !< Set command line interface.
 endtype ui_object
 
 contains
@@ -34,10 +35,9 @@ contains
    call self%cli%parse(error=error)
    if (error/=0) stop
 
-   if (self%cli%is_passed(switch='--mbpar')) then
-      call self%cli%get(switch='--mbpar',      val=self%mbpar_filename, error=error) ; if (error/=0) stop
-      call self%cli%get(switch='--mbpar-path', val=self%mbpar_path,     error=error) ; if (error/=0) stop
-   endif
+   call self%cli%get(switch='--ipath',     val=self%ipath,              error=error) ; if (error/=0) stop
+   call self%cli%get(switch='--procinput', val=self%procinput_filename, error=error) ; if (error/=0) stop
+   call self%cli%get(switch='--mbpar',     val=self%mbpar_filename,     error=error) ; if (error/=0) stop
    endsubroutine parse_cli
 
    ! private methods
@@ -55,21 +55,30 @@ contains
                       examples    = ["xview --mbpar mb.par"],                                              &
                       epilog      = new_line('a')//"all done")
 
+   call self%cli%add(switch='--ipath',           &
+                     switch_ab='-ipath',         &
+                     help='path to input files', &
+                     required=.false.,           &
+                     act='store',                &
+                     def='./',                   &
+                     error=error)
+   if (error/=0) stop
+
+   call self%cli%add(switch='--procinput',          &
+                     switch_ab='-procinput',        &
+                     help='Xnavis input file name', &
+                     required=.false.,              &
+                     act='store',                   &
+                     def='proc.input',              &
+                     error=error)
+   if (error/=0) stop
+
    call self%cli%add(switch='--mbpar',              &
                      switch_ab='-mbpar',            &
                      help='Xnavis input file name', &
                      required=.false.,              &
                      act='store',                   &
                      def='mb.par',                  &
-                     error=error)
-   if (error/=0) stop
-
-   call self%cli%add(switch='--mbpar-path',                 &
-                     switch_ab='-mbpar-path',               &
-                     help='path to Xnavis input file name', &
-                     required=.false.,                      &
-                     act='store',                           &
-                     def='./',                              &
                      error=error)
    if (error/=0) stop
 
