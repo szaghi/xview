@@ -16,6 +16,8 @@ $EXDIRS      = PENF/src/tests
                BeFoR64/src/tests BeFoR64/src/third_party
                FACE/src/tests FACE/src/third_party
                VecFor/src/tests VecFor/src/third_party
+               VTKFortran/src/tests VTKFortran/src/third_party VTKFortran/references
+               FoXy/src/tests FoXy/src/third_party
 
 # main modes
 # GNU

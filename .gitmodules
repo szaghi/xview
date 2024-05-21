@@ -16,3 +16,9 @@
 [submodule "src/third_party/VecFor"]
 	path = src/third_party/VecFor
 	url = https://github.com/szaghi/VecFor
+[submodule "src/third_party/VTKFortran"]
+	path = src/third_party/VTKFortran
+	url = https://github.com/szaghi/VTKFortran
+[submodule "src/third_party/FoXy"]
+	path = src/third_party/FoXy
+	url = https://github.com/Fortran-FOSS-Programmers/FoXy
