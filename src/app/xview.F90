@@ -6,6 +6,7 @@ use xview_file_icc_object
 use xview_file_rst_object
 use xview_file_mbpar_object
 use xview_file_procinput_object
+use xview_file_tec_object
 use xview_file_vtk_object
 use xview_ui_object
 
@@ -17,6 +18,7 @@ type(file_icc_object)       :: file_icc       !< File icc.
 type(file_rst_object)       :: file_rst       !< File rst.
 type(file_procinput_object) :: file_procinput !< proc.input.
 type(file_mbpar_object)     :: file_mbpar     !< mb.par.
+type(file_tec_object)       :: file_tec       !< File Tecplot.
 type(file_vtk_object)       :: file_vtk       !< File VTK.
 
 call ui%parse_cli

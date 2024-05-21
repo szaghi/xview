@@ -2,9 +2,6 @@
 modes = gnu gnu-debug intel intel-debug
 
 [common-variables]
-$CSHARED_GNU = -cpp -c -fPIC -frealloc-lhs
-$CSHARED_INT = -cpp -c -fpic -assume realloc_lhs
-$LSHARED     = -shared
 $CSTATIC_GNU = -cpp -c -frealloc-lhs
 $CSTATIC_INT = -cpp -c -assume realloc_lhs
 $DEBUG_GNU   = -Og -g3 -Wall -Wno-surprising -Wextra -fcheck=all -fbacktrace -std=f2008 -fall-intrinsics
@@ -51,6 +48,8 @@ log             = True
 jobs            = 10
 exclude_dirs    = $EXDIRS
 cflags_heritage = True
+lib_dir         = ./src/third_party/tecio/
+ext_libs        = tecio stdc++
 
 [template-static-gnu-debug]
 compiler        = gnu
@@ -65,6 +64,8 @@ log             = True
 jobs            = 10
 exclude_dirs    = $EXDIRS
 cflags_heritage = True
+lib_dir         = ./src/third_party/tecio/
+ext_libs        = tecio stdc++
 
 [template-static-intel]
 compiler        = intel
@@ -79,6 +80,8 @@ log             = True
 jobs            = 10
 exclude_dirs    = $EXDIRS
 cflags_heritage = True
+lib_dir         = ./src/third_party/tecio/
+ext_libs        = tecio stdc++
 
 [template-static-intel-debug]
 compiler        = intel
@@ -93,3 +96,5 @@ log             = True
 jobs            = 10
 exclude_dirs    = $EXDIRS
 cflags_heritage = True
+lib_dir         = ./src/third_party/tecio/
+ext_libs        = tecio stdc++
