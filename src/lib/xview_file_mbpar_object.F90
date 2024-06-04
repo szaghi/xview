@@ -1,32 +1,31 @@
 !< xview, mb.par class definition.
 module xview_file_mbpar_object
 !< xview, mb.par class definition.
-
+use, intrinsic :: iso_fortran_env, only : stderr => error_unit
 use penf
 use stringifor
+
+use xview_file_object
 
 implicit none
 private
 public :: file_mbpar_object
 
-type :: file_mbpar_object
+type, extends(file_object) :: file_mbpar_object
    !< mb.par class definition.
-   type(string) :: filename           !< Filename, mb.par generally, but it is customizable.
-   type(string) :: basename_grd       !< Basename of grid files.
-   type(string) :: basename_icc       !< Basename of topological files.
-   type(string) :: basename_rst       !< Basename of solution restart files.
-   type(string) :: basename_ini       !< Basename of initial conditions files.
-   type(string) :: turbulence_model   !< Turbulence model.
-   real(R8P)    :: RE=0._R8P          !< Reynolds number.
-   real(R8P)    :: FR=0._R8P          !< Froude number.
-   real(R8P)    :: WE=0._R8P          !< Weber number.
-   logical      :: is_loaded=.false.  !< Flag for checking if the file has been correctly loaded.
+   type(string) :: basename_grd     !< Basename of grid files.
+   type(string) :: basename_icc     !< Basename of topological files.
+   type(string) :: basename_rst     !< Basename of solution restart files.
+   type(string) :: basename_ini     !< Basename of initial conditions files.
+   type(string) :: turbulence_model !< Turbulence model.
+   real(R8P)    :: RE=0._R8P        !< Reynolds number.
+   real(R8P)    :: FR=0._R8P        !< Froude number.
+   real(R8P)    :: WE=0._R8P        !< Weber number.
    contains
       ! public methods
-      procedure, pass(self) :: description     !< Return pretty-printed object description.
-      procedure, pass(self) :: destroy         !< Destroy dynamic memory.
-      procedure, pass(self) :: is_file_present !< Inquire if the file path is valid.
-      procedure, pass(self) :: load_file       !< Load mb.par file data.
+      procedure, pass(self) :: description !< Return pretty-printed object description.
+      procedure, pass(self) :: destroy     !< Destroy dynamic memory.
+      procedure, pass(self) :: load_file   !< Load mb.par file data.
 endtype file_mbpar_object
 
 contains
@@ -56,7 +55,7 @@ contains
    !< Destroy dynamic memory.
    class(file_mbpar_object), intent(inout) :: self !< File data.
 
-   call self%filename%free
+   call self%file_object%destroy
    call self%basename_grd%free
    call self%basename_icc%free
    call self%basename_rst%free
@@ -65,33 +64,27 @@ contains
    self%RE=0._R8P
    self%FR=0._R8P
    self%WE=0._R8P
-   self%is_loaded=.false.
    endsubroutine destroy
 
-   function is_file_present(self) result(is_present)
-   !< Inquire if the file path is valid.
-   class(file_mbpar_object), intent(in) :: self       !< File data.
-   logical                              :: is_present !< Inquiring result.
-
-   is_present = .false.
-   if (self%filename/='') inquire(file=trim(adjustl(self%filename)), exist=is_present)
-   endfunction is_file_present
-
-   subroutine load_file(self, path, filename)
+   subroutine load_file(self, path, filename, verbose)
    !< Load mb.par file data.
    class(file_mbpar_object), intent(inout)        :: self          !< File data.
    character(*),             intent(in), optional :: path          !< Path to mb.par.
    character(*),             intent(in), optional :: filename      !< File name of mb.par, optionally customizable.
+   logical,                  intent(in), optional :: verbose       !< Activate verbose mode.
    character(:), allocatable                      :: path_         !< Path to mb.par, local variable.
    character(:), allocatable                      :: filename_     !< File name of mb.par, local varibale
+   logical                                        :: verbose_      !< Activate verbose mode, local variable.
    type(string)                                   :: mbpar_str     !< mb.par parsing string.
    type(string), allocatable                      :: mbpar_rows(:) !< mb.par rows.
    integer(I4P)                                   :: gln           !< Grid levels number.
 
    path_     = ''       ; if (present(path    )) path_     = trim(adjustl(path))
    filename_ = 'mb.par' ; if (present(filename)) filename_ = trim(adjustl(filename))
+   verbose_  = .false.  ; if (present(verbose))  verbose_  = verbose
    self%filename = path_//filename_
 
+   self%is_loaded = .false.
    if (self%is_file_present()) then
       call mbpar_str%read_file(file=path_//filename)             ! read mb.par file as a single stream
       call mbpar_str%split(tokens=mbpar_rows, sep=new_line('a')) ! get mb.par file rows
@@ -114,7 +107,7 @@ contains
       self%turbulence_model = self%turbulence_model%upper()
       self%is_loaded = .true.
    else
-      print '(A)', 'warning: file "'//self%filename//'" not found!'
+      if (verbose_) write(stderr, "(A)") 'warning: file "'//self%filename//'" not found!'
    endif
    endsubroutine load_file
 

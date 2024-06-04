@@ -17,6 +17,7 @@ public :: file_vtk_object
 
 type :: file_vtk_object
    !< File VTK class definition.
+   character(len=:), allocatable :: path      !< Output path.
    character(len=:), allocatable :: file_name !< File name.
    contains
       ! public methods
@@ -35,12 +36,14 @@ contains
    if (allocated(self%file_name)) deallocate(self%file_name)
    endsubroutine destroy
 
-   elemental subroutine initialize(self, file_name)
+   elemental subroutine initialize(self, path, file_name)
    !< Initialize file.
    class(file_vtk_object), intent(inout) :: self      !< File data.
+   character(*),           intent(in)    :: path      !< Output path.
    character(*),           intent(in)    :: file_name !< File name.
 
    call self%destroy
+   self%path      = trim(adjustl(path))
    self%file_name = trim(adjustl(file_name))
    endsubroutine initialize
 
@@ -49,28 +52,25 @@ contains
    class(file_vtk_object), intent(in) :: self       !< File data.
    logical                            :: is_present !< Inquiring result.
 
-   is_present = allocated(self%file_name)
-   if (is_present) inquire(file=trim(adjustl(self%file_name)), exist=is_present)
+   if (is_present) inquire(file=self%path//self%file_name, exist=is_present)
    endfunction is_file_present
 
-   subroutine save_block_file_vtk(self, is_binary, b, blocks_map, grd, is_cell_centered, icc, sol, patches, file_name, files_blocks)
+   subroutine save_block_file_vtk(self, is_binary, blocks_map, grd, is_cell_centered, files_blocks, icc, sol, patches, file_name)
    !< Save one Xnavis-block-data into a VTK file.
-   class(file_vtk_object), intent(inout)           :: self              !< File data.
-   logical,                intent(in)              :: is_binary         !< Define binary or ascii output.
-   integer(I4P),           intent(in)              :: b                 !< Actual block number.
-   integer(I4P),           intent(in)              :: blocks_map(1:,1:) !< Blocks (processors) map.
-   type(block_grd_object), intent(in)              :: grd               !< Grid of block.
-   logical,                intent(in)              :: is_cell_centered  !< Define variables at cell centers or nodes.
-   type(block_icc_object), intent(in),    optional :: icc               !< Boundary condititions of block.
-   type(block_rst_object), intent(in),    optional :: sol               !< Solution of block.
-   integer(I4P),           intent(in),    optional :: patches(:)        !< Patches boundary conditions.
-   character(*),           intent(in),    optional :: file_name         !< File name.
-   type(string),           intent(inout), optional :: files_blocks(1:)  !< Files blocks groupion.
-   character(len=:), allocatable                   :: base_name         !< Base file name.
-   character(len=:), allocatable                   :: file_name_        !< File name, local variable.
-   character(len=:), allocatable                   :: output_format     !< Output format.
-   integer(I4P), allocatable                       :: extents(:,:)      !< Block/patches extents.
-   integer(I4P)                                    :: patch             !< Counter.
+   class(file_vtk_object), intent(inout)           :: self             !< File data.
+   logical,                intent(in)              :: is_binary        !< Define binary or ascii output.
+   integer(I4P),           intent(in)              :: blocks_map(1:)   !< Blocks (processors) map.
+   type(block_grd_object), intent(in)              :: grd              !< Grid of block.
+   logical,                intent(in)              :: is_cell_centered !< Define variables at cell centers or nodes.
+   type(string),           intent(inout)           :: files_blocks(1:) !< Files blocks group.
+   type(block_icc_object), intent(in),    optional :: icc              !< Boundary condititions of block.
+   type(block_rst_object), intent(in),    optional :: sol              !< Solution of block.
+   integer(I4P),           intent(in),    optional :: patches(:)       !< Patches boundary conditions.
+   character(*),           intent(in),    optional :: file_name        !< File name.
+   character(len=:), allocatable                   :: base_name        !< Base file name.
+   character(len=:), allocatable                   :: output_format    !< Output format.
+   integer(I4P), allocatable                       :: extents(:,:)     !< Block/patches extents.
+   integer(I4P)                                    :: patch            !< Counter.
 
    if (.not.grd%is_loaded) error stop 'error: cannot save VTK block file because passed grd block has not been loaded'
    if ((.not.present(file_name)).and.(.not.allocated(self%file_name))) then
@@ -106,11 +106,12 @@ contains
    contains
       subroutine save_extents
       !< Save data of currently identified extents.
-      type(vtk_file) :: output            !< Output VTK file.
-      integer(I4P)   :: error             !< Error status.
-      integer(I4P)   :: nodes_number      !< Number of nodes.
-      integer(I4P)   :: i1,i2,j1,j2,k1,k2 !< Actual extents.
-      integer(I4P)   :: p                 !< Counter.
+      character(len=:), allocatable :: file_name_        !< File name, local variable.
+      type(vtk_file)                :: output            !< Output VTK file.
+      integer(I4P)                  :: error             !< Error status.
+      integer(I4P)                  :: nodes_number      !< Number of nodes.
+      integer(I4P)                  :: i1,i2,j1,j2,k1,k2 !< Actual extents.
+      integer(I4P)                  :: p                 !< Counter.
 
       do p=1, size(extents, dim=1)
          associate(ci1=>extents(p, 1 ), ci2=>extents(p, 2 ), &
@@ -122,15 +123,17 @@ contains
             if (present(patches)) then
                file_name_ = base_name//'-'//files_blocks(3)//'-patch_'//trim(strz(patches(patch), nz_pad=3))//&
                             '-face_'//trim(str(extents(p, 0), no_sign=.true.))//                              &
-                            '-blk_'//trim(strz(blocks_map(2,b), nz_pad=4))//'-grp_'//trim(strz(blocks_map(1,b), nz_pad=3))
+                            '-blk_'//trim(strz(blocks_map(2), nz_pad=4))//'-grp_'//trim(strz(blocks_map(1), nz_pad=3))
             else
                file_name_ = base_name//'-'//files_blocks(3)//&
-                            '-blk_'//trim(strz(blocks_map(2,b), nz_pad=4))//'-grp_'//trim(strz(blocks_map(1,b), nz_pad=3))
+                            '-blk_'//trim(strz(blocks_map(2), nz_pad=4))//'-grp_'//trim(strz(blocks_map(1), nz_pad=3))
             endif
-            files_blocks(1) = files_blocks(1)//' '//file_name_//'.vts'
+            files_blocks(1) = files_blocks(1)//' '//base_name//'-vts/'//file_name_//'.vts'
             files_blocks(2) = files_blocks(2)//' '//file_name_
             nodes_number = (ni2 - ni1 + 1) * (nj2 - nj1 + 1) * (nk2 - nk1 + 1)
-            error = output%initialize(format=output_format, filename=file_name_//'.vts', mesh_topology='StructuredGrid', &
+            error = output%initialize(format=output_format,                                       &
+                                      filename=self%path//base_name//'-vts/'//file_name_//'.vts', &
+                                      mesh_topology='StructuredGrid',                             &
                                       nx1=ni1, nx2=ni2, ny1=nj1, ny2=nj2, nz1=nk1, nz2=nk2)
             error = output%xml_writer%write_piece(nx1=ni1, nx2=ni2, ny1=nj1, ny2=nj2, nz1=nk1, nz2=nk2)
             error = output%xml_writer%write_geo(n=nodes_number,                         &

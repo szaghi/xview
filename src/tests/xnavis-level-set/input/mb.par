@@ -1,0 +1,33 @@
+'./CC/cc'                         radice file reticolo
+'uniformi'                        tipo condizioni iniziali
+'./CC/cc'                         radice file condizioni contorno
+'nessuno'                         file definizione corpo
+'nessuno'                         file dinamica
+'./RST/boa'                       file restart
+'./Log/'                          file evoluzione e residui
+5000  1000   50                   max.cicli   max.cicli.sg    frequenza.mem
+4   4   1                         numero di sott. - gr. iniziale - simulacro
+3   0  1.00d0
+3   0  1.00d0
+3   0  1.00d0
+3   0  1.00d0
+0.  0.   0.                       epsi epsj epsk
+1                                 numero di Stadi Runge-Kutta nrk
+1.0                               alfa(1)  alfa(2) ...  alfa(nrk)
+'UP3'  6                          discretizzazione flussi conv. (TVD o CENTRATI)
+1.0d0     0.25d0                  viscosità artificiale campo + sup.lib. LS
+0.2d0                             rilassamento viscosità turbolenta
+1.0d-4                            residuo tollerabile
+0.45d0  50                        fattore di stabiita' per la funzione di livello
+1.0d0     3.0d0                   fattore di pseudocompressibilita'
+4.762e5   1.0d-3                  numero di Reynolds  spessbl
+0.4518d0  -1.34761d2              numero di Froude e di Weber
+1.0  0.0  0.0                     uinf,vinf,winf
+'spall'                           modello di turbolenza
+0.25d0                            rilassamento estrap. aria LS
+0.d0                              quota superficie libera
+0                                 n. dischi attuatori
+10d0                              Forzante Chimera
+-1.d-2  3.0d2  2.0d1  1.0d0       dt tmax tsg tempo0
+0d0    0d0  0.0d0  0.5d0          kxwave kywave hwave hbott
+0.0d0 -1.0d0

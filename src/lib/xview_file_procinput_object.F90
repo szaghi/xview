@@ -5,26 +5,25 @@ use, intrinsic :: iso_fortran_env, only : stderr => error_unit
 use penf
 use stringifor
 
+use xview_file_object
+
 implicit none
 private
 public :: file_procinput_object
 
-type :: file_procinput_object
+type, extends(file_object) :: file_procinput_object
    !< **File proc.input** class, parse, manipulate and emit Xnavis processors/blocks map file.
-   type(string)              :: filename            !< Filename, proc.input generally, but it is customizable.
    integer(I4P)              :: blocks_number=0     !< Number of blocks.
    integer(I4P)              :: processors_number=0 !< Number of processors.
    integer(I4P), allocatable :: map(:,:)            !< Processors/blocks maps [1:4, 1:blocks_number] (blk, grp, bdy, proc).
-   logical                   :: is_loaded=.false.   !< Flag for checking if the file has been correctly loaded.
    contains
       ! public methods
-      procedure, pass(self) :: description     !< Return pretty-printed object description.
-      procedure, pass(self) :: destroy         !< Destroy dynamic memory.
-      procedure, pass(self) :: alloc           !< Allocate dynamic memory.
-      procedure, pass(self) :: is_file_present !< Inquire if the file path is valid.
-      procedure, pass(self) :: load_file       !< Load file.
-      procedure, pass(self) :: processor_map   !< Return the map of a given processor.
-      procedure, pass(self) :: save_file       !< Save file.
+      procedure, pass(self) :: description   !< Return pretty-printed object description.
+      procedure, pass(self) :: destroy       !< Destroy dynamic memory.
+      procedure, pass(self) :: alloc         !< Allocate dynamic memory.
+      procedure, pass(self) :: load_file     !< Load file.
+      procedure, pass(self) :: processor_map !< Return the map of a given processor.
+      procedure, pass(self) :: save_file     !< Save file.
 endtype file_procinput_object
 
 contains
@@ -55,8 +54,7 @@ contains
    !< Destroy dynamic memory.
    class(file_procinput_object), intent(inout) :: self !< File data.
 
-   call self%filename%free
-   self%is_loaded = .false.
+   call self%file_object%destroy
    self%blocks_number = 0
    self%processors_number = 0
    if (allocated(self%map)) deallocate(self%map)
@@ -69,30 +67,25 @@ contains
    allocate(self%map(1:4, 1:self%blocks_number))
    endsubroutine alloc
 
-  function is_file_present(self) result(is_present)
-  !< Inquire if the file path is valid.
-  class(file_procinput_object), intent(in) :: self       !< File data.
-  logical                                  :: is_present !< Inquiring result.
-
-  is_present = .false.
-  if (self%filename/='') inquire(file=trim(adjustl(self%filename)), exist=is_present)
-  endfunction is_file_present
-
-   subroutine load_file(self, path, filename)
+   subroutine load_file(self, path, filename, verbose)
    !< Load file.
    class(file_procinput_object), intent(inout)        :: self      !< File data.
    character(*),                 intent(in), optional :: path      !< Path to mb.par.
    character(*),                 intent(in), optional :: filename  !< File name.
+   logical,                      intent(in), optional :: verbose   !< Activate verbose mode.
    character(:), allocatable                          :: path_     !< Path to mb.par, local variable.
    character(:), allocatable                          :: filename_ !< File name, local variable.
+   logical                                            :: verbose_  !< Activate verbose mode, local variable.
    integer(I4P)                                       :: file_unit !< Logical file unit.
    integer(I4P)                                       :: b         !< Counter.
 
    call self%destroy
    path_     = ''           ; if (present(path    )) path_     = trim(adjustl(path))
    filename_ = 'proc.input' ; if (present(filename)) filename_ = trim(adjustl(filename))
+   verbose_  = .false.      ; if (present(verbose))  verbose_  = verbose
    self%filename = path_//filename_
 
+   self%is_loaded = .false.
    if (self%is_file_present()) then
       open(newunit=file_unit, file=trim(adjustl(self%filename)), action='read')
       read(file_unit, *) ! record skipped
@@ -111,21 +104,22 @@ contains
       self%processors_number = maxval(self%map(4, :))
       self%is_loaded = .true.
    else
-      write(stderr, "(A)")'error: file "'//trim(adjustl(self%filename))//'" not found!'
-      self%is_loaded = .false.
+      if (verbose_) write(stderr, "(A)") 'warning: file "'//trim(adjustl(self%filename))//'" not found!'
    endif
    endsubroutine load_file
 
-   function processor_map(self, processor) result(map)
+   function processor_map(self, processor, blocks_number) result(map)
    !< Return the map of a give processor.
-   class(file_procinput_object), intent(in) :: self      !< File data.
-   integer(I4P),                 intent(in) :: processor !< Processor queried.
-   integer(I4P), allocatable                :: map(:,:)  !< Processor/blocks map.
-   integer(I4P)                             :: Nb        !< Number of local blocks.
-   integer(I4P)                             :: b         !< Counter.
-   integer(I4P)                             :: c         !< Counter.
+   class(file_procinput_object), intent(in) :: self          !< File data.
+   integer(I4P),                 intent(in) :: processor     !< Processor queried.
+   integer(I4P),                 intent(in) :: blocks_number !< Number of blocks contained into the given processor file.
+   integer(I4P), allocatable                :: map(:,:)      !< Processor/blocks map.
+   integer(I4P)                             :: Nb            !< Number of local blocks.
+   integer(I4P)                             :: b             !< Counter.
+   integer(I4P)                             :: c             !< Counter.
 
    if (allocated(self%map)) then
+      ! proc.input is loaded
       Nb = 0
       do b=1, self%blocks_number
          if (self%map(4, b) == processor) Nb = Nb + 1
@@ -139,6 +133,13 @@ contains
             map(1, c) = self%map(2, b)
             map(2, c) = b
          endif
+      enddo
+   else
+      ! proc.input is not loaded, use blocks number to create a local blocks map
+      allocate(map(1:2, 1:blocks_number))
+      do b=1, blocks_number
+         map(1, b) = 0
+         map(2, b) = b
       enddo
    endif
    endfunction processor_map

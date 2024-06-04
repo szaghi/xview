@@ -16,9 +16,9 @@ type :: block_rst_object
    integer(I4P)              :: Nk=0                                        !< Number of cells in k direction.
    integer(I4P)              :: gc(6)=[2, 2, 2, 2, 2, 2]                    !< Number of ghost cells.
    logical                   :: is_level_set=.false.                        !< Use Level Set model.
-   logical                   :: is_zero_eq=.false.                          !< Use *zero* equations turbulence model.
-   logical                   :: is_one_eq=.false.                           !< Use *one* equations turbulence model.
-   logical                   :: is_two_eq=.false.                           !< Use *two* equations turbulence model.
+   logical                   :: is_zeroeq=.false.                           !< Use *zero* equations turbulence model.
+   logical                   :: is_oneeq=.false.                            !< Use *one* equations turbulence model.
+   logical                   :: is_twoeq=.false.                            !< Use *two* equations turbulence model.
    type(vector), allocatable :: momentum(:,:,:)                             !< Momentum field.
    real(R8P),    allocatable :: pressure(:,:,:)                             !< Pressure field.
    real(R8P),    allocatable :: level_set(:,:,:)                            !< Level set field.
@@ -55,9 +55,9 @@ contains
    self%Nk = 0
    self%gc = 2
    self%is_level_set = .false.
-   self%is_zero_eq = .false.
-   self%is_one_eq = .false.
-   self%is_two_eq = .false.
+   self%is_zeroeq = .false.
+   self%is_oneeq = .false.
+   self%is_twoeq = .false.
    if (allocated(self%momentum))                             deallocate(self%momentum)
    if (allocated(self%pressure))                             deallocate(self%pressure)
    if (allocated(self%level_set))                            deallocate(self%level_set)
@@ -80,11 +80,11 @@ contains
          allocate(self%level_set(1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
          allocate(self%level_set_zero(1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
       endif
-      if (self%is_zero_eq.or.self%is_one_eq.or.self%is_two_eq) then
+      if (self%is_zeroeq.or.self%is_oneeq.or.self%is_twoeq) then
          allocate(self%viscosity(1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
       endif
-      if (self%is_one_eq) allocate(self%turbulent_viscosity(1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
-      if (self%is_two_eq) then
+      if (self%is_oneeq) allocate(self%turbulent_viscosity(1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
+      if (self%is_twoeq) then
          allocate(self%turbulent_kinetic_energy(1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
          allocate(self%turbulent_kinetic_energy_dissipation(1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
       endif
@@ -131,7 +131,7 @@ contains
    has_viscosity = allocated(self%viscosity)
    endfunction has_viscosity
 
-   subroutine init(self, Ni, Nj, Nk, gc, is_level_set, turbulence_model)
+   subroutine init(self, Ni, Nj, Nk, gc, is_level_set, is_zeroeq, is_oneeq, is_twoeq)
    !< Initialize block.
    class(block_rst_object), intent(inout)        :: self             !< Block data.
    integer(I4P),            intent(in)           :: Ni               !< Number of cells in i direction.
@@ -139,27 +139,20 @@ contains
    integer(I4P),            intent(in)           :: Nk               !< Number of cells in k direction.
    integer(I4P),            intent(in), optional :: gc(6)            !< Number of ghost cells.
    logical,                 intent(in), optional :: is_level_set     !< Flag for level set function presence.
-   character(*),            intent(in), optional :: turbulence_model !< Turbulence model: 'zero_eq', 'one_eq', 'two_eq'.
+   logical,                 intent(in), optional :: is_zeroeq        !< Use *zero* equations turbulence model.
+   logical,                 intent(in), optional :: is_oneeq         !< Use *one* equations turbulence model.
+   logical,                 intent(in), optional :: is_twoeq         !< Use *two* equations turbulence model.
 
    call self%destroy
-   if (present(is_level_set)) self%is_level_set = is_level_set
-   if (present(turbulence_model)) then
-      select case(trim(adjustl(turbulence_model)))
-      case('zero_eq', 'ZERO_EQ')
-         self%is_zero_eq = .true.
-      case('one_eq', 'ONE_EQ')
-         self%is_one_eq = .true.
-      case('two_eq', 'TWO_EQ')
-         self%is_two_eq = .true.
-      case default
-         ! do nothing: no turbulence model is assumed, no other turbulence members are allocated
-      endselect
-   endif
    self%Ni = Ni
    self%Nj = Nj
    self%Nk = Nk
-   if (present(gc)) self%gc = gc
-   10 call self%alloc
+   if (present(gc          )) self%gc           = gc
+   if (present(is_level_set)) self%is_level_set = is_level_set
+   if (present(is_zeroeq   )) self%is_zeroeq    = is_zeroeq
+   if (present(is_oneeq    )) self%is_oneeq     = is_oneeq
+   if (present(is_twoeq    )) self%is_twoeq     = is_twoeq
+   call self%alloc
    endsubroutine init
 
    subroutine interpolate_at_nodes(self)
@@ -209,14 +202,16 @@ contains
       endsubroutine interpolate_R8P
    endsubroutine interpolate_at_nodes
 
-   subroutine load_dimensions(self, file_unit, is_level_set, turbulence_model)
+   subroutine load_dimensions(self, file_unit, is_level_set, is_zeroeq, is_oneeq, is_twoeq)
    !< Load block dimensions from file.
    !<
    !< @note The solution file must be already open and the current record-index must be at the proper block dimensions record.
    class(block_rst_object), intent(inout)        :: self             !< Block data.
    integer(I4P),            intent(in)           :: file_unit        !< Logical file unit.
    logical,                 intent(in), optional :: is_level_set     !< Flag for level set function presence.
-   character(*),            intent(in), optional :: turbulence_model !< Turbulence model: 'zero_eq', 'one_eq', 'two_eq'.
+   logical,                 intent(in), optional :: is_zeroeq        !< Use *zero* equations turbulence model.
+   logical,                 intent(in), optional :: is_oneeq         !< Use *one* equations turbulence model.
+   logical,                 intent(in), optional :: is_twoeq         !< Use *two* equations turbulence model.
    integer(I4P)                                  :: Ni               !< Number of cells in i direction.
    integer(I4P)                                  :: Nj               !< Number of cells in j direction.
    integer(I4P)                                  :: Nk               !< Number of cells in k direction.
@@ -226,9 +221,9 @@ contains
    read(file_unit, end=10, err=10) Ni, Nj, Nk, gc
    10 continue
    if (all(gc >= 0)) then
-      call self%init(Ni=Ni, Nj=Nj, Nk=Nk, gc=gc, is_level_set=is_level_set, turbulence_model=turbulence_model)
+      call self%init(Ni=Ni,Nj=Nj,Nk=Nk,gc=gc,is_level_set=is_level_set,is_zeroeq=is_zeroeq,is_oneeq=is_oneeq,is_twoeq=is_twoeq)
    else
-      call self%init(Ni=Ni, Nj=Nj, Nk=Nk, is_level_set=is_level_set, turbulence_model=turbulence_model)
+      call self%init(Ni=Ni,Nj=Nj,Nk=Nk,      is_level_set=is_level_set,is_zeroeq=is_zeroeq,is_oneeq=is_oneeq,is_twoeq=is_twoeq)
    endif
    endsubroutine load_dimensions
 
@@ -252,11 +247,11 @@ contains
          read(file_unit)(((self%level_set(i, j, k), i=0, Ni + 1), j=0, Nj + 1), k=0, Nk + 1)
          read(file_unit)(((self%level_set_zero(i, j, k), i=0, Ni + 1), j=0, Nj + 1), k=0, Nk + 1)
       endif
-      if (self%is_zero_eq.or.self%is_one_eq.or.self%is_two_eq) then
+      if (self%is_zeroeq.or.self%is_oneeq.or.self%is_twoeq) then
          read(file_unit)(((self%viscosity(i, j, k), i=0, Ni + 1), j=0, Nj + 1), k=0, Nk + 1)
       endif
-      if (self%is_one_eq) read(file_unit)(((self%turbulent_viscosity(i, j, k), i=0, Ni + 1), j=0, Nj + 1), k=0, Nk + 1)
-      if (self%is_two_eq) then
+      if (self%is_oneeq) read(file_unit)(((self%turbulent_viscosity(i, j, k), i=0, Ni + 1), j=0, Nj + 1), k=0, Nk + 1)
+      if (self%is_twoeq) then
          read(file_unit)(((self%turbulent_kinetic_energy(i, j, k), i=0, Ni + 1), j=0, Nj + 1), k=0, Nk + 1)
          read(file_unit)(((self%turbulent_kinetic_energy_dissipation(i, j, k), i=0, Ni + 1), j=0, Nj + 1), k=0, Nk + 1)
       endif
@@ -305,11 +300,11 @@ contains
          write(file_unit)(((self%level_set(i, j, k), i=0, Ni + 1), j=0, Nj + 1), k=0, Nk + 1)
          write(file_unit)(((self%level_set_zero(i, j, k), i=0, Ni + 1), j=0, Nj + 1), k=0, Nk + 1)
       endif
-      if (self%is_zero_eq.or.self%is_one_eq.or.self%is_two_eq) then
+      if (self%is_zeroeq.or.self%is_oneeq.or.self%is_twoeq) then
          write(file_unit)(((self%viscosity(i, j, k), i=0, Ni + 1), j=0, Nj + 1), k=0, Nk + 1)
       endif
-      if (self%is_one_eq) write(file_unit)(((self%turbulent_viscosity(i, j, k), i=0, Ni + 1), j=0, Nj + 1), k=0, Nk + 1)
-      if (self%is_two_eq) then
+      if (self%is_oneeq) write(file_unit)(((self%turbulent_viscosity(i, j, k), i=0, Ni + 1), j=0, Nj + 1), k=0, Nk + 1)
+      if (self%is_twoeq) then
          write(file_unit)(((self%turbulent_kinetic_energy(i, j, k), i=0, Ni + 1), j=0, Nj + 1), k=0, Nk + 1)
          write(file_unit)(((self%turbulent_kinetic_energy_dissipation(i, j, k), i=0, Ni + 1), j=0, Nj + 1), k=0, Nk + 1)
       endif
