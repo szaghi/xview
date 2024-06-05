@@ -134,6 +134,7 @@ contains
       call self%cli%get(        group='postprocess',switch='--vtk',  val=is_vtk,               error=error) ; if (error/=0) stop
       call self%cli%get(        group='postprocess',switch='--cell', val=self%is_cell_centered,error=error) ; if (error/=0) stop
       call self%cli%get_varying(group='postprocess',switch='--patch',val=self%patches,         error=error) ; if (error/=0) stop
+      if (self%cli%is_passed(group='postprocess', switch='--patch')) self%is_patch=.true.
    endif
    if (self%is_dns) then
       self%is_zeroeq = .false.

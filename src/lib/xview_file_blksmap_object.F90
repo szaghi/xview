@@ -55,7 +55,7 @@ contains
 
    subroutine get_files_blocks(self, files_blocks)
    !< Return list of blocks per files accordingly blocks groups map.
-   class(file_blksmap_object), intent(inout) :: self                !< File data.
+   class(file_blksmap_object), intent(in)    :: self                !< File data.
    type(string), allocatable,  intent(inout) :: files_blocks(:,:)   !< Files blocks grouping.
    type(string), allocatable                 :: blocks(:)           !< Blocks list of each group.
    type(string)                              :: buf                 !< Buffer string.
