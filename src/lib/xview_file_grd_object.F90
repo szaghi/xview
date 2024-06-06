@@ -48,12 +48,13 @@ contains
    allocate(self%blocks(1:self%blocks_number))
    endsubroutine alloc
 
-   subroutine load_file(self, filename, is_centers_to_compute, is_extents_to_compute, verbose)
+   subroutine load_file(self, filename, is_centers_to_compute, is_extents_to_compute, is_metrics_to_compute, verbose)
    !< Load file.
    class(file_grd_object), intent(inout)        :: self                  !< File data.
    character(*),           intent(in)           :: filename              !< File name.
    logical,                intent(in), optional :: is_centers_to_compute !< Flag to activate the computation of cell centers.
    logical,                intent(in), optional :: is_extents_to_compute !< Flag to activate the computation of extents.
+   logical,                intent(in), optional :: is_metrics_to_compute !< Flag to activate the computation of metrics.
    logical,                intent(in), optional :: verbose               !< Activate verbose mode.
    logical                                      :: verbose_              !< Activate verbose mode, local variable.
    integer(I4P)                                 :: file_unit             !< Logical file unit.
@@ -69,10 +70,14 @@ contains
       do b=1, self%blocks_number
          call self%blocks(b)%load_dimensions(file_unit=file_unit,                          &
                                              is_centers_to_allocate=is_centers_to_compute, &
-                                             is_extents_to_allocate=is_extents_to_compute)
+                                             is_extents_to_allocate=is_extents_to_compute, &
+                                             is_metrics_to_allocate=is_metrics_to_compute)
       enddo
       do b=1, self%blocks_number
          call self%blocks(b)%load_nodes(file_unit=file_unit)
+         if (present(is_metrics_to_compute)) then
+            if (is_metrics_to_compute) call self%blocks(b)%compute_metrics
+         endif
       enddo
       10 close(file_unit)
       self%is_loaded = .true.

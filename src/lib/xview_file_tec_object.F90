@@ -186,7 +186,7 @@ contains
    elseif (present(patches).and.present(icc)) then ! save only the queried patches
       if (icc%is_loaded) then
          do patch=1, size(patches, dim=1)
-            call icc%get_patches_extents(patch=patches(patch), patches_extents=extents)
+            ! call icc%get_patches_extents(patch=patches(patch), patches_extents=extents)
             if (allocated(extents)) call save_extents
          enddo
       endif

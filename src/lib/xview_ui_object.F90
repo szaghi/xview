@@ -33,6 +33,7 @@ type :: ui_object
    character(MAX_CHAR_LENGTH)   :: opath                    !< Path to output files.
    character(MAX_CHAR_LENGTH)   :: basename_out             !< Base name of output files.
    character(2)                 :: grid_level               !< Grid level to be postprocessed.
+   real(R8P)                    :: RE=0._R8P                !< Reynolds number.
    logical                      :: is_cell_centered=.false. !< Data are cell-centered, otherwise node-centered.
    logical                      :: is_level_set=.false.     !< Solution has level set variable.
    logical                      :: is_dns=.false.           !< Solution has not turbulent module (DNS).
@@ -43,7 +44,8 @@ type :: ui_object
    logical                      :: is_tec=.false.           !< Output is Tecplot formatted.
    logical                      :: is_vtk=.true.            !< Output is VTK formatted.
    logical                      :: is_patch=.false.         !< Extract patch instead of whole volume.
-   integer(I4P), allocatable    :: patches(:)               !< List of patches boundary conditions.
+   integer(I4P)                 :: patch                    !< Patch boundary conditions.
+   logical                      :: do_compute_aux=.false.   !< Do auxiliaries (metrics, forces, running-avg...) computation.
    logical                      :: do_glob=.false.          !< Do glob files search, input file names become base name.
    logical                      :: do_postprocess=.false.   !< Do postprocess for Paraview/Tecplo visualization.
    logical                      :: do_interpolate=.false.   !< Do interpolate on new grids.
@@ -67,9 +69,7 @@ contains
    call self%file_mbpar%load_file(path=self%ipath, filename=self%mbpar_file_name, verbose=self%verbose)
    if (self%file_mbpar%is_loaded) then
       ! override cli with mb.par data
-      ! self%filename_grd   = self%file_mbpar%filename_grd//''
-      ! self%filename_icc   = self%file_mbpar%filename_icc//''
-      ! self%filename_rst   = self%file_mbpar%filename_rst//''
+      self%RE = self%file_mbpar%RE
       self%is_level_set = self%file_mbpar%FR > 0._R8P
       select case(self%file_mbpar%turbulence_model%slice(1,3))
       case('BAL')
@@ -125,15 +125,17 @@ contains
    call self%cli%get(switch='--rst',                val=self%filename_rst,        error=error) ; if (error/=0) stop
    call self%cli%get(switch='--opath',              val=self%opath,               error=error) ; if (error/=0) stop
    call self%cli%get(switch='--out',                val=self%basename_out,        error=error) ; if (error/=0) stop
+   call self%cli%get(switch='--RE',                 val=self%RE,                  error=error) ; if (error/=0) stop
    call self%cli%get(switch='--level-set',          val=self%is_level_set,        error=error) ; if (error/=0) stop
    call self%cli%get(switch='--no-turbulent-model', val=self%is_dns,              error=error) ; if (error/=0) stop
    call self%cli%get(switch='--turbulent-eq',       val=turbulent_eq,             error=error) ; if (error/=0) stop
+   call self%cli%get(switch='--compute-aux',        val=self%do_compute_aux,      error=error) ; if (error/=0) stop
    if (self%cli%run_command('postprocess')) then
-      call self%cli%get(        group='postprocess',switch='--ascii',val=self%is_ascii,        error=error) ; if (error/=0) stop
-      call self%cli%get(        group='postprocess',switch='--tec',  val=is_tec,               error=error) ; if (error/=0) stop
-      call self%cli%get(        group='postprocess',switch='--vtk',  val=is_vtk,               error=error) ; if (error/=0) stop
-      call self%cli%get(        group='postprocess',switch='--cell', val=self%is_cell_centered,error=error) ; if (error/=0) stop
-      call self%cli%get_varying(group='postprocess',switch='--patch',val=self%patches,         error=error) ; if (error/=0) stop
+      call self%cli%get(group='postprocess',switch='--ascii',val=self%is_ascii,        error=error) ; if (error/=0) stop
+      call self%cli%get(group='postprocess',switch='--tec',  val=is_tec,               error=error) ; if (error/=0) stop
+      call self%cli%get(group='postprocess',switch='--vtk',  val=is_vtk,               error=error) ; if (error/=0) stop
+      call self%cli%get(group='postprocess',switch='--cell', val=self%is_cell_centered,error=error) ; if (error/=0) stop
+      call self%cli%get(group='postprocess',switch='--patch',val=self%patch,           error=error) ; if (error/=0) stop
       if (self%cli%is_passed(group='postprocess', switch='--patch')) self%is_patch=.true.
    endif
    if (self%is_dns) then
@@ -287,6 +289,14 @@ contains
                      error=error)
    if (error/=0) stop
 
+   call self%cli%add(switch='--RE',          &
+                     help='Reynolds number', &
+                     required=.false.,       &
+                     act='store',            &
+                     def='1.0',              &
+                     error=error)
+   if (error/=0) stop
+
    call self%cli%add(switch='--level-set',           &
                      help='solution with level set', &
                      required=.false.,               &
@@ -309,6 +319,14 @@ contains
                      act='store',                             &
                      def='1',                                 &
                      choices='0,1,2',                         &
+                     error=error)
+   if (error/=0) stop
+
+   call self%cli%add(switch='--compute-aux',                                  &
+                     help='compute auxiliary variables (metrics, forces...)', &
+                     required=.false.,                                        &
+                     act='store_true',                                        &
+                     def='.false.',                                           &
                      error=error)
    if (error/=0) stop
 
@@ -357,14 +375,13 @@ contains
                      error=error)
    if (error/=0) stop
 
-   call self%cli%add(switch='--patch',                 &
-                     switch_ab='-p',                   &
-                     help='extract specified patches', &
-                     required=.false.,                 &
-                     act='store',                      &
-                     nargs='+',                        &
-                     def='1',                          &
-                     group='postprocess',              &
+   call self%cli%add(switch='--patch',               &
+                     switch_ab='-p',                 &
+                     help='extract specified patch', &
+                     required=.false.,               &
+                     act='store',                    &
+                     def='-999',                     &
+                     group='postprocess',            &
                      error=error)
    if (error/=0) stop
 

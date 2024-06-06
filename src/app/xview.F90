@@ -20,17 +20,17 @@ type(ui_object) :: ui !< User Interface.
 call ui%get_options
 if (ui%cli%run_command('postprocess')) then
    if (ui%is_patch) then
-      call postprocess(ui=ui, patches=ui%patches)
+      call postprocess(ui=ui, patch=ui%patch)
    else
       call postprocess(ui=ui)
    endif
 endif
 
 contains
-   subroutine postprocess(ui, patches)
+   subroutine postprocess(ui, patch)
    !< Post process single or glob tuples of Grd/Icc/rSt (gis) input files.
    type(ui_object), intent(in)           :: ui                !< User Interface.
-   integer(I4P),    intent(in), optional :: patches(:)        !< Patches boundary conditions.
+   integer(I4P),    intent(in), optional :: patch             !< Patch boundary conditions.
    type(string), allocatable             :: filenames_grd(:)  !< List of grd files.
    type(string), allocatable             :: filenames_icc(:)  !< List of icc files.
    type(string), allocatable             :: filenames_rst(:)  !< List of rst files.
@@ -103,7 +103,7 @@ contains
                                     opath        = trim(adjustl(ui%opath)),        &
                                     basename_out = trim(adjustl(ui%basename_out)), &
                                     files_blocks = files_blocks(:,f),              &
-                                    patches=patches)
+                                    patch=patch)
             enddo
          else
             write(stderr, '(A)') 'error: at leaset grid files must be loaded'
@@ -120,7 +120,7 @@ contains
                            opath        = trim(adjustl(ui%opath)),        &
                            basename_out = trim(adjustl(ui%basename_out)), &
                            files_blocks = files_blocks(:,1),              &
-                           patches=patches)
+                           patch=patch)
    endif
    if (ui%is_vtk) then
       if (ui%file_procinput%is_loaded.and.ui%file_blksmap%is_loaded) &
@@ -130,7 +130,7 @@ contains
    endif
    endsubroutine postprocess
 
-   subroutine postprocess_gis(ui,myrank,ipath,filename_grd,filename_icc,filename_rst,opath,basename_out,files_blocks,patches)
+   subroutine postprocess_gis(ui,myrank,ipath,filename_grd,filename_icc,filename_rst,opath,basename_out,files_blocks,patch)
    !< Post process single tuple of Grd/Icc/rSt (gis) input files.
    type(ui_object),       intent(in)           :: ui              !< User Interface.
    integer(I4P),          intent(in)           :: myrank          !< Input files process rank in proc.input.
@@ -141,7 +141,7 @@ contains
    character(*),          intent(in)           :: opath           !< Path to output files.
    character(*),          intent(in)           :: basename_out    !< Base name of output files.
    type(string),          intent(inout)        :: files_blocks(3) !< Files blocks grouping.
-   integer(I4P),          intent(in), optional :: patches(:)      !< Patches boundary conditions.
+   integer(I4P),          intent(in), optional :: patch           !< Patch boundary conditions.
    type(file_grd_object)                       :: file_grd        !< File grd.
    type(file_icc_object)                       :: file_icc        !< File icc.
    type(file_rst_object)                       :: file_rst        !< File icc.
@@ -151,16 +151,41 @@ contains
    type(string)                                :: basename        !< Current file basename.
    integer(I4P)                                :: b               !< Counter.
 
-   if (filename_grd/=OPT_UNSET) call file_grd%load_file(filename=ipath//filename_grd, verbose=ui%verbose)
+   if (filename_grd/=OPT_UNSET) call file_grd%load_file(filename=ipath//filename_grd, &
+                                                        is_metrics_to_compute=ui%do_compute_aux, verbose=ui%verbose)
    if (file_grd%is_loaded) then
       if (filename_icc/=OPT_UNSET) call file_icc%load_file(filename=ipath//filename_icc, verbose=ui%verbose)
-      if (filename_rst/=OPT_UNSET) call file_rst%load_file(filename=ipath//filename_rst, verbose=ui%verbose, &
-                                                           blocks_number=file_grd%blocks_number,             &
+      ! compute patches extents if patch is queried or whole blocks extensts
+      do b=1, file_grd%blocks_number
+         if (file_icc%is_loaded.and.present(patch)) then
+            ! specific BC has been queried
+            call file_grd%blocks(b)%compute_patches_extents(tcc=file_icc%blocks(b)%tcc, patch=patch)
+         else
+            ! whole blocks extents have been queried
+            call file_grd%blocks(b)%compute_patches_extents
+         endif
+      enddo
+      if (file_icc%is_loaded) then
+         if (ui%do_compute_aux) then
+            do b=1, file_grd%blocks_number
+               call file_grd%blocks(b)%correct_metrics_bc(tcc=file_icc%blocks(b)%tcc)
+            enddo
+          endif
+      endif
+      if (filename_rst/=OPT_UNSET) call file_rst%load_file(file_grd=file_grd,                                &
+                                                           filename=ipath//filename_rst, verbose=ui%verbose, &
                                                            is_level_set=ui%is_level_set,                     &
                                                            is_zeroeq=ui%is_zeroeq,                           &
                                                            is_oneeq=ui%is_oneeq,                             &
                                                            is_twoeq=ui%is_twoeq,                             &
-                                                           is_cell_centered=ui%is_cell_centered)
+                                                           is_cell_centered=ui%is_cell_centered,             &
+                                                           is_aux_to_compute=ui%do_compute_aux)
+      if (file_icc%is_loaded.and.file_rst%is_loaded.and.ui%do_compute_aux.and.present(patch)) then
+         do b=1, file_grd%blocks_number
+            call file_rst%blocks(b)%compute_yplus(grd=file_grd%blocks(b), icc=file_icc%blocks(b), patch=patch, RE=ui%RE)
+            call file_rst%blocks(b)%compute_tau(  grd=file_grd%blocks(b), icc=file_icc%blocks(b), patch=patch, RE=ui%RE)
+         enddo
+      endif
       if (ui%is_vtk) then
          call file_vtk%initialize(path=trim(adjustl(ui%opath)), file_name=trim(adjustl(basename_out)))
          files_blocks(1) = ''
@@ -175,23 +200,25 @@ contains
                ! save all grd, icc and sol
                do b=1, file_grd%blocks_number
                   call file_vtk%save_block_file_vtk(is_binary=.not.ui%is_ascii,           &
+                                                    save_aux=ui%do_compute_aux,           &
                                                     blocks_map=blocks_map(:,b),           &
                                                     grd=file_grd%blocks(b),               &
                                                     is_cell_centered=ui%is_cell_centered, &
                                                     icc=file_icc%blocks(b),               &
                                                     sol=file_rst%blocks(b),               &
-                                                    patches=patches,                      &
+                                                    patch=patch,                          &
                                                     files_blocks=files_blocks)
                enddo
             else
                ! save grd and icc
                do b=1, file_grd%blocks_number
                   call file_vtk%save_block_file_vtk(is_binary=.not.ui%is_ascii,           &
+                                                    save_aux=ui%do_compute_aux,           &
                                                     blocks_map=blocks_map(:,b),           &
                                                     grd=file_grd%blocks(b),               &
                                                     is_cell_centered=ui%is_cell_centered, &
                                                     icc=file_icc%blocks(b),               &
-                                                    patches=patches,                      &
+                                                    patch=patch,                          &
                                                     files_blocks=files_blocks)
                enddo
             endif
@@ -199,10 +226,10 @@ contains
             ! save only grd without icc and sol
             do b=1, file_grd%blocks_number
                call file_vtk%save_block_file_vtk(is_binary=.not.ui%is_ascii,           &
+                                                 save_aux=ui%do_compute_aux,           &
                                                  blocks_map=blocks_map(:,b),           &
                                                  grd=file_grd%blocks(b),               &
                                                  is_cell_centered=ui%is_cell_centered, &
-                                                 patches=patches,                      &
                                                  files_blocks=files_blocks)
             enddo
          endif

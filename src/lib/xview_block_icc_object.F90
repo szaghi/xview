@@ -26,7 +26,6 @@ type :: block_icc_object
       procedure, pass(self) :: interpolate_at_nodes !< Interpolate rcc at nodes.
       procedure, pass(self) :: load_dimensions      !< Load block dimensions from file.
       procedure, pass(self) :: load_icc             !< Load block icc from file.
-      procedure, pass(self) :: get_patches_extents  !< Return the patches extents of given patch boundary conditions.
       procedure, pass(self) :: save_dimensions      !< Save block dimensions into file.
       procedure, pass(self) :: save_icc             !< Save block icc into file.
 endtype block_icc_object
@@ -134,112 +133,6 @@ contains
    endassociate
    self%is_loaded = .true.
    endsubroutine load_icc
-
-   pure subroutine get_patches_extents(self, patch, patches_extents, offset)
-   !< Return the patches extents of given patch boundary conditions.
-   class(block_icc_object),   intent(in)           :: self                 !< Block data.
-   integer(I4P),              intent(in)           :: patch                !< Patch bc to be found.
-   integer(I4P), allocatable, intent(inout)        :: patches_extents(:,:) !< Patches extents, [np, 13]. The second index means
-                                                                           !+ 0  => patch face (1,2,3,4,5,6);
-                                                                           !+ 1  => cell i-min;
-                                                                           !+ 2  => cell i-max;
-                                                                           !+ 3  => cell j-min;
-                                                                           !+ 4  => cell j-max;
-                                                                           !+ 5  => cell k-min;
-                                                                           !+ 6  => cell k-max;
-                                                                           !+ 7  => node i-min;
-                                                                           !+ 8  => node i-max;
-                                                                           !+ 9  => node j-min;
-                                                                           !+ 10 => node j-max;
-                                                                           !+ 11 => node k-min;
-                                                                           !+ 12 => node k-max;
-   integer(I4P),              intent(in), optional :: offset               !< Offset from patch.
-   integer(I4P)                                    :: np                   !< Number of patches found.
-   integer(I4P)                                    :: offset_              !< Offset from patch, local variable.
-   integer(I4P), parameter                         :: ci1=1,  ci2=2,  &
-                                                      cj1=3,  cj2=4,  &
-                                                      ck1=5,  ck2=6,  &
-                                                      ni1=7,  ni2=8,  &
-                                                      nj1=9,  nj2=10, &
-                                                      nk1=11, nk2=12       !< Named indexes.
-
-   if (allocated(patches_extents)) deallocate(patches_extents)
-   if (.not.allocated(self%tcc)) return
-   offset_ = 0 ; if (present(offset)) offset_ = offset
-   np = 0
-   associate(tcc=>self%tcc, Ni=>self%Ni, Nj=>self%Nj, Nk=>self%Nk)
-      if (any(tcc(0   , :   , :   ) == patch).or.any(tcc(0   , :   , :   ) == patch+10_I4P)) np = np + 1
-      if (any(tcc(Ni+1, :   , :   ) == patch).or.any(tcc(Ni+1, :   , :   ) == patch+10_I4P)) np = np + 1
-      if (any(tcc(:   , 0   , :   ) == patch).or.any(tcc(:   , 0   , :   ) == patch+10_I4P)) np = np + 1
-      if (any(tcc(:   , Nj+1, :   ) == patch).or.any(tcc(:   , Nj+1, :   ) == patch+10_I4P)) np = np + 1
-      if (any(tcc(:   , :   , 0   ) == patch).or.any(tcc(:   , :   , 0   ) == patch+10_I4P)) np = np + 1
-      if (any(tcc(:   , :   , Nk+1) == patch).or.any(tcc(:   , :   , Nk+1) == patch+10_I4P)) np = np + 1
-      if (np > 0) then
-         allocate(patches_extents(1:np, 0:12))
-         np = 0
-         if (any(tcc(0,:,:) == patch).or.any(tcc(0,:,:) == patch+10_I4P)) then
-            np = np + 1
-            patches_extents(np, 0) = 1
-            patches_extents(np, ci1) = 1 + offset_ ; patches_extents(np, ci2) = 1 + offset_
-            patches_extents(np, cj1) = 1           ; patches_extents(np, cj2) = Nj
-            patches_extents(np, ck1) = 1           ; patches_extents(np, ck2) = Nk
-            patches_extents(np, ni1) = 0 + offset_ ; patches_extents(np, ni2) = 0 + offset_
-            patches_extents(np, nj1) = 0           ; patches_extents(np, nj2) = Nj
-            patches_extents(np, nk1) = 0           ; patches_extents(np, nk2) = Nk
-         endif
-         if (any(tcc(Ni+1,:,:) == patch).or.any(tcc(Ni+1,:,:) == patch+10_I4P)) then
-            np = np + 1
-            patches_extents(np, 0) = 2
-            patches_extents(np, ci1) = Ni - offset_ ; patches_extents(np, ci2) = Ni - offset_
-            patches_extents(np, cj1) = 1            ; patches_extents(np, cj2) = Nj
-            patches_extents(np, ck1) = 1            ; patches_extents(np, ck2) = Nk
-            patches_extents(np, ni1) = Ni - offset_ ; patches_extents(np, ni2) = Ni - offset_
-            patches_extents(np, nj1) = 0            ; patches_extents(np, nj2) = Nj
-            patches_extents(np, nk1) = 0            ; patches_extents(np, nk2) = Nk
-         endif
-         if (any(tcc(:,0,:) == patch).or.any(tcc(:,0,:) == patch+10_I4P)) then
-            np = np + 1
-            patches_extents(np, 0) = 3
-            patches_extents(np, ci1) = 1           ; patches_extents(np, ci2) = Ni
-            patches_extents(np, cj1) = 1 + offset_ ; patches_extents(np, cj2) = 1 + offset_
-            patches_extents(np, ck1) = 1           ; patches_extents(np, ck2) = Nk
-            patches_extents(np, ni1) = 0           ; patches_extents(np, ni2) = Ni
-            patches_extents(np, nj1) = 0 + offset_ ; patches_extents(np, nj2) = 0 + offset_
-            patches_extents(np, nk1) = 0           ; patches_extents(np, nk2) = Nk
-         endif
-         if (any(tcc(:,Nj+1,:) == patch).or.any(tcc(:,Nj+1,:) == patch+10_I4P)) then
-            np = np + 1
-            patches_extents(np, 0) = 4
-            patches_extents(np, ci1) = 1            ; patches_extents(np, ci2) = Ni
-            patches_extents(np, cj1) = Nj - offset_ ; patches_extents(np, cj2) = Nj - offset_
-            patches_extents(np, ck1) = 1            ; patches_extents(np, ck2) = Nk
-            patches_extents(np, ni1) = 0            ; patches_extents(np, ni2) = Ni
-            patches_extents(np, nj1) = Nj - offset_ ; patches_extents(np, nj2) = Nj - offset_
-            patches_extents(np, nk1) = 0            ; patches_extents(np, nk2) = Nk
-         endif
-         if (any(tcc(:,:,0) == patch).or.any(tcc(:,:,0) == patch+10_I4P)) then
-            np = np + 1
-            patches_extents(np, 0) = 5
-            patches_extents(np, ci1) = 1           ; patches_extents(np, ci2) = Ni
-            patches_extents(np, cj1) = 1           ; patches_extents(np, cj2) = Nj
-            patches_extents(np, ck1) = 1 + offset_ ; patches_extents(np, ck2) = 1 + offset_
-            patches_extents(np, ni1) = 0           ; patches_extents(np, ni2) = Ni
-            patches_extents(np, nj1) = 0           ; patches_extents(np, nj2) = Nj
-            patches_extents(np, nk1) = 0 + offset_ ; patches_extents(np, nk2) = 0 + offset_
-         endif
-         if (any(tcc(:,:,Nk+1) == patch).or.any(tcc(:,:,Nk+1) == patch+10_I4P)) then
-            np = np + 1
-            patches_extents(np, 0) = 6
-            patches_extents(np, ci1) = 1            ; patches_extents(np, ci2) = Ni
-            patches_extents(np, cj1) = 1            ; patches_extents(np, cj2) = Nj
-            patches_extents(np, ck1) = Nk - offset_ ; patches_extents(np, ck2) = Nk - offset_
-            patches_extents(np, ni1) = 0            ; patches_extents(np, ni2) = Ni
-            patches_extents(np, nj1) = 0            ; patches_extents(np, nj2) = Nj
-            patches_extents(np, nk1) = Nk - offset_ ; patches_extents(np, nk2) = Nk - offset_
-         endif
-      endif
-   endassociate
-   endsubroutine get_patches_extents
 
    subroutine save_dimensions(self, file_unit, save_gc)
    !< Save block dimensions into file.

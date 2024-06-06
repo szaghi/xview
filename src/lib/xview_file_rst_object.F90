@@ -6,6 +6,7 @@ use penf
 
 use xview_block_rst_object
 use xview_file_object
+use xview_file_grd_object
 
 implicit none
 private
@@ -49,23 +50,25 @@ contains
    allocate(self%blocks(1:self%blocks_number))
    endsubroutine alloc
 
-   subroutine load_file(self, blocks_number, filename, is_level_set, is_zeroeq, is_oneeq, is_twoeq, is_cell_centered, verbose)
+   subroutine load_file(self,file_grd,filename,is_level_set,is_zeroeq,is_oneeq,is_twoeq,is_cell_centered,is_aux_to_compute,verbose)
    !< Load file.
-   class(file_rst_object), intent(inout)        :: self             !< File data.
-   integer(I4P),           intent(in)           :: blocks_number    !< Number of blocks contained into the file.
-   character(*),           intent(in)           :: filename         !< File name of geo file.
-   logical,                intent(in), optional :: is_level_set     !< Flag for level set function presence.
-   logical,                intent(in), optional :: is_zeroeq        !< Use *zero* equations turbulence model.
-   logical,                intent(in), optional :: is_oneeq         !< Use *one* equations turbulence model.
-   logical,                intent(in), optional :: is_twoeq         !< Use *two* equations turbulence model.
-   logical,                intent(in), optional :: is_cell_centered !< Define variables at cell centers or nodes.
-   logical,                intent(in), optional :: verbose          !< Activate verbose mode.
-   logical                                      :: verbose_         !< Activate verbose mode, local variable.
-   integer(I4P)                                 :: file_unit        !< Logical file unit of geo file.
-   integer(I4P)                                 :: b                !< Counter.
+   class(file_rst_object), intent(inout)        :: self              !< File data.
+   type(file_grd_object),  intent(in)           :: file_grd          !< File grd data.
+   character(*),           intent(in)           :: filename          !< File name of geo file.
+   logical,                intent(in), optional :: is_level_set      !< Flag for level set function presence.
+   logical,                intent(in), optional :: is_zeroeq         !< Use *zero* equations turbulence model.
+   logical,                intent(in), optional :: is_oneeq          !< Use *one* equations turbulence model.
+   logical,                intent(in), optional :: is_twoeq          !< Use *two* equations turbulence model.
+   logical,                intent(in), optional :: is_cell_centered  !< Define variables at cell centers or nodes.
+   logical,                intent(in), optional :: is_aux_to_compute !< Flag to allocate also metrics arrays.
+   logical,                intent(in), optional :: verbose           !< Activate verbose mode.
+   logical                                      :: verbose_          !< Activate verbose mode, local variable.
+   integer(I4P)                                 :: file_unit         !< Logical file unit of geo file.
+   integer(I4P)                                 :: b                 !< Counter.
 
    call self%destroy
    verbose_ = .false. ; if (present(verbose)) verbose_ = verbose
+   associate(blocks_number=>file_grd%blocks_number)
    self%filename = trim(adjustl(filename))
    if (self%is_file_present()) then
       self%blocks_number = blocks_number
@@ -73,11 +76,13 @@ contains
       open(newunit=file_unit, file=trim(adjustl(filename)), form='unformatted', action='read')
       read(file_unit) self%time
       do b=1, self%blocks_number
-         call self%blocks(b)%load_dimensions(file_unit=file_unit, &
-                                             is_level_set=is_level_set, is_zeroeq=is_zeroeq, is_oneeq=is_oneeq, is_twoeq=is_twoeq)
+         call self%blocks(b)%load_dimensions(file_unit=file_unit,                                                                  &
+                                             is_level_set=is_level_set, is_zeroeq=is_zeroeq, is_oneeq=is_oneeq, is_twoeq=is_twoeq, &
+                                             is_aux_to_compute=is_aux_to_compute)
       enddo
       do b=1, self%blocks_number
-         call self%blocks(b)%load_solution(file_unit=file_unit, is_cell_centered=is_cell_centered)
+         call self%blocks(b)%load_solution(file_unit=file_unit, is_cell_centered=is_cell_centered, &
+                                           is_aux_to_compute=is_aux_to_compute, grd=file_grd%blocks(b))
       enddo
       close(file_unit)
       self%is_loaded = .true.
@@ -85,6 +90,7 @@ contains
       if (verbose_) write(stderr, "(A)") 'warning: file "'//trim(adjustl(filename))//'" not found!'
       self%is_loaded = .false.
    endif
+   endassociate
    endsubroutine load_file
 
    subroutine save_file(self, filename)
