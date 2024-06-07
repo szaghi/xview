@@ -19,8 +19,9 @@ type, extends(file_object) :: file_mbpar_object
    type(string) :: basename_ini     !< Basename of initial conditions files.
    type(string) :: turbulence_model !< Turbulence model.
    real(R8P)    :: RE=0._R8P        !< Reynolds number.
-   real(R8P)    :: FR=0._R8P        !< Froude number.
-   real(R8P)    :: WE=0._R8P        !< Weber number.
+   real(R8P)    :: FR=-1._R8P       !< Froude number.
+   real(R8P)    :: WE=-1._R8P       !< Weber number.
+   real(R8P)    :: zfs=0._R8P       !< Z quote of free surface.
    contains
       ! public methods
       procedure, pass(self) :: description !< Return pretty-printed object description.
@@ -45,7 +46,8 @@ contains
       desc = desc//'  Turbulence model:                     '//self%turbulence_model//NL
       desc = desc//'  Reynolds number:                      '//str(self%RE)         //NL
       desc = desc//'  Froude number:                        '//str(self%FR)         //NL
-      desc = desc//'  Weber number:                         '//str(self%WE)
+      desc = desc//'  Weber number:                         '//str(self%WE)         //NL
+      desc = desc//'  Z quote of free surface:              '//str(self%zfs)
    else
       desc = 'warning: file "'//self%filename//'" not loaded!'
    endif
@@ -62,8 +64,9 @@ contains
    call self%basename_ini%free
    call self%turbulence_model%free
    self%RE=0._R8P
-   self%FR=0._R8P
-   self%WE=0._R8P
+   self%FR=-1._R8P
+   self%WE=-1._R8P
+   self%zfs=0._R8P
    endsubroutine destroy
 
    subroutine load_file(self, path, filename, verbose)
@@ -98,6 +101,7 @@ contains
       call get_token(row=mbpar_rows(9+gln+10), sep=' ', n=1, var_r=self%RE              ) ! Reynolds number
       call get_token(row=mbpar_rows(9+gln+11), sep=' ', n=1, var_r=self%FR              ) ! Froude number
       call get_token(row=mbpar_rows(9+gln+11), sep=' ', n=2, var_r=self%WE              ) ! Weber number
+      call get_token(row=mbpar_rows(9+gln+15), sep=' ', n=1, var_r=self%zfs             ) ! Z quote of free surdace
       ! forward mb.par relative path
       self%basename_grd = path_//self%basename_grd
       self%basename_ini = path_//self%basename_ini

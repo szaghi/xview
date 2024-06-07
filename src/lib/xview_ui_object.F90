@@ -34,6 +34,9 @@ type :: ui_object
    character(MAX_CHAR_LENGTH)   :: basename_out             !< Base name of output files.
    character(2)                 :: grid_level               !< Grid level to be postprocessed.
    real(R8P)                    :: RE=0._R8P                !< Reynolds number.
+   real(R8P)                    :: FR=-1._R8P               !< Froude number.
+   real(R8P)                    :: rFR2=0._R8P              !< 1/(Froude number)^2.
+   real(R8P)                    :: zfs=0._R8P               !< Z quote of free surface.
    logical                      :: is_cell_centered=.false. !< Data are cell-centered, otherwise node-centered.
    logical                      :: is_level_set=.false.     !< Solution has level set variable.
    logical                      :: is_dns=.false.           !< Solution has not turbulent module (DNS).
@@ -69,7 +72,9 @@ contains
    call self%file_mbpar%load_file(path=self%ipath, filename=self%mbpar_file_name, verbose=self%verbose)
    if (self%file_mbpar%is_loaded) then
       ! override cli with mb.par data
-      self%RE = self%file_mbpar%RE
+      self%RE  = self%file_mbpar%RE
+      self%FR  = self%file_mbpar%FR
+      self%zfs = self%file_mbpar%zfs
       self%is_level_set = self%file_mbpar%FR > 0._R8P
       select case(self%file_mbpar%turbulence_model%slice(1,3))
       case('BAL')
@@ -89,6 +94,7 @@ contains
       endselect
       if (self%verbose) print '(A)', self%file_mbpar%description()
    endif
+   if (self%FR> 0._R8P) self%rFR2 = 1._R8P/(self%FR**2)
    call self%file_procinput%load_file(path=self%ipath, filename=self%procinput_file_name, verbose=self%verbose)
    if (self%blksmap_file_name/=OPT_unset) &
       call self%file_blksmap%load_file(path=self%ipath, filename=self%blksmap_file_name, verbose=self%verbose)
@@ -126,6 +132,8 @@ contains
    call self%cli%get(switch='--opath',              val=self%opath,               error=error) ; if (error/=0) stop
    call self%cli%get(switch='--out',                val=self%basename_out,        error=error) ; if (error/=0) stop
    call self%cli%get(switch='--RE',                 val=self%RE,                  error=error) ; if (error/=0) stop
+   call self%cli%get(switch='--FR',                 val=self%FR,                  error=error) ; if (error/=0) stop
+   call self%cli%get(switch='--zfs',                val=self%zfs,                 error=error) ; if (error/=0) stop
    call self%cli%get(switch='--level-set',          val=self%is_level_set,        error=error) ; if (error/=0) stop
    call self%cli%get(switch='--no-turbulent-model', val=self%is_dns,              error=error) ; if (error/=0) stop
    call self%cli%get(switch='--turbulent-eq',       val=turbulent_eq,             error=error) ; if (error/=0) stop
@@ -294,6 +302,22 @@ contains
                      required=.false.,       &
                      act='store',            &
                      def='1.0',              &
+                     error=error)
+   if (error/=0) stop
+
+   call self%cli%add(switch='--FR',        &
+                     help='Froude number', &
+                     required=.false.,     &
+                     act='store',          &
+                     def='-1.0',           &
+                     error=error)
+   if (error/=0) stop
+
+   call self%cli%add(switch='--zfs',                 &
+                     help='Z quote of free surface', &
+                     required=.false.,               &
+                     act='store',                    &
+                     def='0.0',                      &
                      error=error)
    if (error/=0) stop
 

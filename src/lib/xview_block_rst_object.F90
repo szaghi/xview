@@ -38,12 +38,16 @@ type :: block_rst_object
    real(R8P),    allocatable :: yplus(:,:,:)                                !< Estimation of y+.
    type(vector), allocatable :: tau(:,:,:)                                  !< Tau wall.
    real(R8P),    allocatable :: div_tau(:,:,:)                              !< Divergence of Tau wall.
+   type(vector), allocatable :: force_hydrostatic(:,:,:)                    !< Hydrostic part of forces.
+   type(vector), allocatable :: force_pressure(:,:,:)                       !< Pressure part of forces.
+   type(vector), allocatable :: force_viscous(:,:,:)                        !< Viscous part of forces.
    logical                   :: is_loaded=.false.                           !< Flag for checking if the block is loaded.
    contains
       ! public methods
       procedure, pass(self) :: destroy                      !< Destroy dynamic memory.
       procedure, pass(self) :: alloc                        !< Allocate dynamic memory.
       procedure, pass(self) :: compute_aux                  !< Compute auxiliary varibles.
+      procedure, pass(self) :: compute_loads                !< Compute loads (forces and torques) on patches.
       procedure, pass(self) :: compute_yplus                !< Compute yplus on patches.
       procedure, pass(self) :: compute_tau                  !< Compute Tau wall and its divergence on patches.
       procedure, pass(self) :: has_level_set                !< Return true if block has level set functions.
@@ -81,13 +85,16 @@ contains
    if (allocated(self%turbulent_kinetic_energy))             deallocate(self%turbulent_kinetic_energy)
    if (allocated(self%turbulent_kinetic_energy_dissipation)) deallocate(self%turbulent_kinetic_energy_dissipation)
    self%has_aux = .false.
-   if (allocated(self%lambda2))   deallocate(self%lambda2)
-   if (allocated(self%qfactor))   deallocate(self%qfactor)
-   if (allocated(self%helicity))  deallocate(self%helicity)
-   if (allocated(self%vorticity)) deallocate(self%vorticity)
-   if (allocated(self%yplus))     deallocate(self%yplus)
-   if (allocated(self%tau))       deallocate(self%tau)
-   if (allocated(self%div_tau))   deallocate(self%div_tau)
+   if (allocated(self%lambda2))           deallocate(self%lambda2)
+   if (allocated(self%qfactor))           deallocate(self%qfactor)
+   if (allocated(self%helicity))          deallocate(self%helicity)
+   if (allocated(self%vorticity))         deallocate(self%vorticity)
+   if (allocated(self%yplus))             deallocate(self%yplus)
+   if (allocated(self%tau))               deallocate(self%tau)
+   if (allocated(self%div_tau))           deallocate(self%div_tau)
+   if (allocated(self%force_hydrostatic)) deallocate(self%force_hydrostatic)
+   if (allocated(self%force_pressure))    deallocate(self%force_pressure)
+   if (allocated(self%force_viscous))     deallocate(self%force_viscous)
    self%is_loaded = .false.
    endsubroutine destroy
 
@@ -111,13 +118,16 @@ contains
       allocate(self%turbulent_kinetic_energy_dissipation(1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
    endif
    if (self%has_aux) then
-      allocate(self%lambda2(  1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6))) ; self%lambda2   = 0._R8P
-      allocate(self%qfactor(  1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6))) ; self%qfactor   = 0._R8P
-      allocate(self%helicity( 1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6))) ; self%helicity  = 0._R8P
-      allocate(self%vorticity(1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6))) ; self%vorticity = 0._R8P
-      allocate(self%yplus(    0-gc(1):Ni+gc(2), 0-gc(3):Nj+gc(4), 0-gc(5):Nk+gc(6))) ; self%yplus     = 0._R8P
-      allocate(self%tau(      0-gc(1):Ni+gc(2), 0-gc(3):Nj+gc(4), 0-gc(5):Nk+gc(6))) ; self%tau       = 0._R8P
-      allocate(self%div_tau(  0-gc(1):Ni+gc(2), 0-gc(3):Nj+gc(4), 0-gc(5):Nk+gc(6))) ; self%div_tau   = 0._R8P
+      allocate(self%lambda2(          1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6))) ; self%lambda2           = 0._R8P
+      allocate(self%qfactor(          1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6))) ; self%qfactor           = 0._R8P
+      allocate(self%helicity(         1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6))) ; self%helicity          = 0._R8P
+      allocate(self%vorticity(        1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6))) ; self%vorticity         = 0._R8P
+      allocate(self%yplus(            0-gc(1):Ni+gc(2), 0-gc(3):Nj+gc(4), 0-gc(5):Nk+gc(6))) ; self%yplus             = 0._R8P
+      allocate(self%tau(              0-gc(1):Ni+gc(2), 0-gc(3):Nj+gc(4), 0-gc(5):Nk+gc(6))) ; self%tau               = 0._R8P
+      allocate(self%div_tau(          0-gc(1):Ni+gc(2), 0-gc(3):Nj+gc(4), 0-gc(5):Nk+gc(6))) ; self%div_tau           = 0._R8P
+      allocate(self%force_hydrostatic(0-gc(1):Ni+gc(2), 0-gc(3):Nj+gc(4), 0-gc(5):Nk+gc(6))) ; self%force_hydrostatic = 0._R8P
+      allocate(self%force_pressure(   0-gc(1):Ni+gc(2), 0-gc(3):Nj+gc(4), 0-gc(5):Nk+gc(6))) ; self%force_pressure    = 0._R8P
+      allocate(self%force_viscous(    0-gc(1):Ni+gc(2), 0-gc(3):Nj+gc(4), 0-gc(5):Nk+gc(6))) ; self%force_viscous     = 0._R8P
    endif
    endassociate
    endsubroutine alloc
@@ -283,6 +293,113 @@ contains
    enddo
    endassociate
    endsubroutine compute_aux
+
+   subroutine compute_loads(self, grd, icc, patch, RE, rFR2, zfs)
+   !< Compute loads (forces and torques) on patches.
+   class(block_rst_object), intent(inout) :: self    !< Block data.
+   type(block_grd_object),  intent(in)    :: grd     !< Block grd data.
+   type(block_icc_object),  intent(in)    :: icc     !< Block icc data.
+   integer(I4P),            intent(in)    :: patch   !< Patch bc to be found.
+   real(R8P),               intent(in)    :: RE      !< Reynolds number.
+   real(R8P),               intent(in)    :: rFR2    !< 1/(Froude number)^2.
+   real(R8P),               intent(in)    :: zfs     !< Z quote of free surface.
+   type(vector)                           :: NdS     !< Normal "tilde" for viscous part of forces (or distance for y+).
+   type(vector)                           :: fco     !< Pacth center coordinates.
+   integer(I4P)                           :: i,j,k,p !< Counter.
+
+   if (.not.allocated(grd%patches_extents)) return
+   do p=1, size(grd%patches_extents, dim=1)
+      associate(face=>grd%patches_extents(p,0),                                   &
+                ci1=>grd%patches_extents(p,1 ), ci2=>grd%patches_extents(p,2 ),   &
+                cj1=>grd%patches_extents(p,3 ), cj2=>grd%patches_extents(p,4 ),   &
+                ck1=>grd%patches_extents(p,5 ), ck2=>grd%patches_extents(p,6 ),   &
+                ni1=>grd%patches_extents(p,7 ), ni2=>grd%patches_extents(p,8 ),   &
+                nj1=>grd%patches_extents(p,9 ), nj2=>grd%patches_extents(p,10),   &
+                nk1=>grd%patches_extents(p,11), nk2=>grd%patches_extents(p,12),   &
+                nodes=>grd%nodes, NFiS=>grd%NFiS, NFjS=>grd%NFjS, NFkS=>grd%NFkS, &
+                NFi=>grd%NFi, NFj=>grd%NFj, NFk=>grd%NFk,                         &
+                volume=>grd%volume,                                               &
+                iicc=>icc%icc,ticc=>icc%tcc,                                      &
+                is_level_set=>self%is_level_set, f0=>self%level_set_zero,         &
+                momentum=>self%momentum, pressure=>self%pressure,                 &
+                force_hydrostatic=>self%force_hydrostatic, force_pressure=>self%force_pressure, force_viscous=>self%force_viscous)
+      select case(face)
+      case(1,2)
+         do k=ck1,ck2
+            do j=cj1,cj2
+               ! patch center coordinates
+               fco = 0.25_R8P*(nodes(ni1,j,k)+nodes(ni1,j-1,k)+nodes(ni1,j,k-1)+nodes(ni1,j-1,k-1))
+               ! check if this is an active cell
+               if (ticc(ni1-1+face,j,k)/=patch.or.iicc(ci1,j,k)/=0) cycle
+               ! hydrostatic part
+               if (is_level_set) then
+                  if (f0(ni1-1+face,j,k)>0._R8P) cycle
+                  force_hydrostatic(ni1,j,k) = (fco%z - zfs)*rFR2*NFiS(ni1,j,k)
+               endif
+               ! pressure part of forces
+               force_pressure(ni1,j,k) = -(1.5_R8P*pressure(ci1,j,k) - 0.5_R8P*pressure(ci1+3-2*face,j,k))*NFiS(ni1,j,k)
+               ! viscous part of forces
+               NdS = (2._R8P*NFiS(ni1,j,k) + NFiS(ni1+1,j,k) + NFiS(ni1-1,j,k))/(2._R8P*(volume(ni1,j,k)+volume(ni1+1,j,k)))
+               force_viscous(ni1,j,k) = (momentum(ci1-1+face,j,k) - momentum(ci1-2+face,j,k))*(NFi(ni1,j,k).dot.NdS)/RE
+               if (face==2) then
+                  force_hydrostatic(ni1,j,k) = -force_hydrostatic(ni1,j,k)
+                  force_pressure(   ni1,j,k) = -force_pressure(   ni1,j,k)
+                  force_viscous(    ni1,j,k) = -force_viscous(    ni1,j,k)
+               endif
+            enddo
+         enddo
+      case(3,4)
+         do k=ck1,ck2
+            do i=ci1,ci2
+               ! patch center coordinates
+               fco = 0.25_R8P*(nodes(i,nj1,k)+nodes(i-1,nj1,k)+nodes(i,nj1,k-1)+nodes(i-1,nj1,k-1))
+               ! check if this is an active cell
+               if (ticc(i,nj1-1+(face-2),k)/=patch.or.iicc(i,cj1,k)/=0) cycle
+               ! hydrostatic part
+               if (is_level_set) then
+                 if (f0(i,nj1-1+(face-2),k)>0._R8P) cycle
+                 force_hydrostatic(i,nj1,k) = (fco%z - zfs)*rFR2*NFjS(i,nj1,k)
+               endif
+               ! pressure part of forces
+               force_pressure(i,nj1,k) = -(1.5_R_P*pressure(i,cj1,k) - 0.5_R_P*pressure(i,cj1+3-2*(face-2),k))*NFjS(i,nj1,k)
+               ! viscous part of forces
+               NdS = (2._R8P*NFjS(i,nj1,k) + NFjS(i,nj1+1,k) + NFjS(i,nj1-1,k))/(2._R8P*(volume(i,nj1,k)+volume(i,nj1+1,k)))
+               force_viscous(i,nj1,k) = (momentum(i,cj1-1+(face-2),k) - momentum(i,cj1-2+(face-2),k))*(NFj(i,nj1,k).dot.NdS)/RE
+               if (face==4) then
+                  force_hydrostatic(i,nj1,k) = -force_hydrostatic(i,nj1,k)
+                  force_pressure(   i,nj1,k) = -force_pressure(   i,nj1,k)
+                  force_viscous(    i,nj1,k) = -force_viscous(    i,nj1,k)
+               endif
+            enddo
+         enddo
+      case(5,6)
+         do j=cj1,cj2
+            do i=ci1,ci2
+               ! patch center coordinates
+               fco = 0.25_R8P*(nodes(i,j,nk1)+nodes(i-1,j,nk1)+nodes(i,j-1,nk1)+nodes(i-1,j-1,nk1))
+               ! check if this is an active cell
+               if (ticc(i,j,nk1-1+(face-4))/=patch.or.iicc(i,j,ck1)/=0) cycle
+               ! hydrostatic part
+               if (is_level_set) then
+                  if (f0(i,j,nk1-1+(face-4))>0._R8P) cycle
+                  force_hydrostatic(i,j,nk1) = (fco%z - zfs)*rFR2*NFkS(i,j,nk1)
+               endif
+               ! pressure part of forces
+               force_pressure(i,j,nk1) = -(1.5_R_P*pressure(i,j,ck1) - 0.5_R_P*pressure(i,j,ck1+3-2*(face-4)))*NFkS(i,j,nk1)
+               ! viscous part of forces
+               NdS = (2._R8P*NFkS(i,j,nk1) + NFkS(i,j,nk1+1) + NFkS(i,j,nk1-1))/(2._R8P*(volume(i,j,nk1)+volume(i,j,nk1+1)))
+               force_viscous(i,j,nk1) = (momentum(i,j,ck1-1+(face-4)) - momentum(i,j,ck1-2+(face-4)))*(NFk(i,j,nk1).dot.NdS)/RE
+               if (face==6) then
+                  force_hydrostatic(i,j,nk1) = -force_hydrostatic(i,j,nk1)
+                  force_pressure(   i,j,nk1) = -force_pressure(   i,j,nk1)
+                  force_viscous(    i,j,nk1) = -force_viscous(    i,j,nk1)
+               endif
+            enddo
+         enddo
+      endselect
+      endassociate
+   enddo
+   endsubroutine compute_loads
 
    subroutine compute_yplus(self, grd, icc, patch, RE)
    !< Compute yplus on patches.

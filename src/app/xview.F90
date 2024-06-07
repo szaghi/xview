@@ -182,6 +182,8 @@ contains
                                                            is_aux_to_compute=ui%do_compute_aux)
       if (file_icc%is_loaded.and.file_rst%is_loaded.and.ui%do_compute_aux.and.present(patch)) then
          do b=1, file_grd%blocks_number
+            call file_rst%blocks(b)%compute_loads(grd=file_grd%blocks(b), icc=file_icc%blocks(b), patch=patch, RE=ui%RE, &
+                                                  rFR2=ui%rFR2, zfs=ui%zfs)
             call file_rst%blocks(b)%compute_yplus(grd=file_grd%blocks(b), icc=file_icc%blocks(b), patch=patch, RE=ui%RE)
             call file_rst%blocks(b)%compute_tau(  grd=file_grd%blocks(b), icc=file_icc%blocks(b), patch=patch, RE=ui%RE)
          enddo
