@@ -41,6 +41,9 @@ type :: block_rst_object
    type(vector), allocatable :: force_hydrostatic(:,:,:)                    !< Hydrostic part of forces.
    type(vector), allocatable :: force_pressure(:,:,:)                       !< Pressure part of forces.
    type(vector), allocatable :: force_viscous(:,:,:)                        !< Viscous part of forces.
+   type(vector), allocatable :: torque_hydrostatic(:,:,:)                   !< Hydrostic part of torques.
+   type(vector), allocatable :: torque_pressure(:,:,:)                      !< Pressure part of torques.
+   type(vector), allocatable :: torque_viscous(:,:,:)                       !< Viscous part of torques.
    logical                   :: is_loaded=.false.                           !< Flag for checking if the block is loaded.
    contains
       ! public methods
@@ -85,16 +88,19 @@ contains
    if (allocated(self%turbulent_kinetic_energy))             deallocate(self%turbulent_kinetic_energy)
    if (allocated(self%turbulent_kinetic_energy_dissipation)) deallocate(self%turbulent_kinetic_energy_dissipation)
    self%has_aux = .false.
-   if (allocated(self%lambda2))           deallocate(self%lambda2)
-   if (allocated(self%qfactor))           deallocate(self%qfactor)
-   if (allocated(self%helicity))          deallocate(self%helicity)
-   if (allocated(self%vorticity))         deallocate(self%vorticity)
-   if (allocated(self%yplus))             deallocate(self%yplus)
-   if (allocated(self%tau))               deallocate(self%tau)
-   if (allocated(self%div_tau))           deallocate(self%div_tau)
-   if (allocated(self%force_hydrostatic)) deallocate(self%force_hydrostatic)
-   if (allocated(self%force_pressure))    deallocate(self%force_pressure)
-   if (allocated(self%force_viscous))     deallocate(self%force_viscous)
+   if (allocated(self%lambda2))            deallocate(self%lambda2)
+   if (allocated(self%qfactor))            deallocate(self%qfactor)
+   if (allocated(self%helicity))           deallocate(self%helicity)
+   if (allocated(self%vorticity))          deallocate(self%vorticity)
+   if (allocated(self%yplus))              deallocate(self%yplus)
+   if (allocated(self%tau))                deallocate(self%tau)
+   if (allocated(self%div_tau))            deallocate(self%div_tau)
+   if (allocated(self%force_hydrostatic))  deallocate(self%force_hydrostatic)
+   if (allocated(self%force_pressure))     deallocate(self%force_pressure)
+   if (allocated(self%force_viscous))      deallocate(self%force_viscous)
+   if (allocated(self%torque_hydrostatic)) deallocate(self%torque_hydrostatic)
+   if (allocated(self%torque_pressure))    deallocate(self%torque_pressure)
+   if (allocated(self%torque_viscous))     deallocate(self%torque_viscous)
    self%is_loaded = .false.
    endsubroutine destroy
 
@@ -118,16 +124,19 @@ contains
       allocate(self%turbulent_kinetic_energy_dissipation(1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
    endif
    if (self%has_aux) then
-      allocate(self%lambda2(          1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6))) ; self%lambda2           = 0._R8P
-      allocate(self%qfactor(          1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6))) ; self%qfactor           = 0._R8P
-      allocate(self%helicity(         1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6))) ; self%helicity          = 0._R8P
-      allocate(self%vorticity(        1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6))) ; self%vorticity         = 0._R8P
-      allocate(self%yplus(            0-gc(1):Ni+gc(2), 0-gc(3):Nj+gc(4), 0-gc(5):Nk+gc(6))) ; self%yplus             = 0._R8P
-      allocate(self%tau(              0-gc(1):Ni+gc(2), 0-gc(3):Nj+gc(4), 0-gc(5):Nk+gc(6))) ; self%tau               = 0._R8P
-      allocate(self%div_tau(          0-gc(1):Ni+gc(2), 0-gc(3):Nj+gc(4), 0-gc(5):Nk+gc(6))) ; self%div_tau           = 0._R8P
-      allocate(self%force_hydrostatic(0-gc(1):Ni+gc(2), 0-gc(3):Nj+gc(4), 0-gc(5):Nk+gc(6))) ; self%force_hydrostatic = 0._R8P
-      allocate(self%force_pressure(   0-gc(1):Ni+gc(2), 0-gc(3):Nj+gc(4), 0-gc(5):Nk+gc(6))) ; self%force_pressure    = 0._R8P
-      allocate(self%force_viscous(    0-gc(1):Ni+gc(2), 0-gc(3):Nj+gc(4), 0-gc(5):Nk+gc(6))) ; self%force_viscous     = 0._R8P
+      allocate(self%lambda2(           1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6))) ; self%lambda2            = 0._R8P
+      allocate(self%qfactor(           1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6))) ; self%qfactor            = 0._R8P
+      allocate(self%helicity(          1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6))) ; self%helicity           = 0._R8P
+      allocate(self%vorticity(         1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6))) ; self%vorticity          = 0._R8P
+      allocate(self%yplus(             0-gc(1):Ni+gc(2), 0-gc(3):Nj+gc(4), 0-gc(5):Nk+gc(6))) ; self%yplus              = 0._R8P
+      allocate(self%tau(               0-gc(1):Ni+gc(2), 0-gc(3):Nj+gc(4), 0-gc(5):Nk+gc(6))) ; self%tau                = 0._R8P
+      allocate(self%div_tau(           0-gc(1):Ni+gc(2), 0-gc(3):Nj+gc(4), 0-gc(5):Nk+gc(6))) ; self%div_tau            = 0._R8P
+      allocate(self%force_hydrostatic( 0-gc(1):Ni+gc(2), 0-gc(3):Nj+gc(4), 0-gc(5):Nk+gc(6))) ; self%force_hydrostatic  = 0._R8P
+      allocate(self%force_pressure(    0-gc(1):Ni+gc(2), 0-gc(3):Nj+gc(4), 0-gc(5):Nk+gc(6))) ; self%force_pressure     = 0._R8P
+      allocate(self%force_viscous(     0-gc(1):Ni+gc(2), 0-gc(3):Nj+gc(4), 0-gc(5):Nk+gc(6))) ; self%force_viscous      = 0._R8P
+      allocate(self%torque_hydrostatic(0-gc(1):Ni+gc(2), 0-gc(3):Nj+gc(4), 0-gc(5):Nk+gc(6))) ; self%torque_hydrostatic = 0._R8P
+      allocate(self%torque_pressure(   0-gc(1):Ni+gc(2), 0-gc(3):Nj+gc(4), 0-gc(5):Nk+gc(6))) ; self%torque_pressure    = 0._R8P
+      allocate(self%torque_viscous(    0-gc(1):Ni+gc(2), 0-gc(3):Nj+gc(4), 0-gc(5):Nk+gc(6))) ; self%torque_viscous     = 0._R8P
    endif
    endassociate
    endsubroutine alloc
@@ -322,7 +331,12 @@ contains
                 iicc=>icc%icc,ticc=>icc%tcc,                                      &
                 is_level_set=>self%is_level_set, f0=>self%level_set_zero,         &
                 momentum=>self%momentum, pressure=>self%pressure,                 &
-                force_hydrostatic=>self%force_hydrostatic, force_pressure=>self%force_pressure, force_viscous=>self%force_viscous)
+                force_hydrostatic=>self%force_hydrostatic,                        &
+                force_pressure=>self%force_pressure,                              &
+                force_viscous=>self%force_viscous,                                &
+                torque_hydrostatic=>self%torque_hydrostatic,                      &
+                torque_pressure=>self%torque_pressure,                            &
+                torque_viscous=>self%torque_viscous)
       select case(face)
       case(1,2)
          do k=ck1,ck2
@@ -346,6 +360,10 @@ contains
                   force_pressure(   ni1,j,k) = -force_pressure(   ni1,j,k)
                   force_viscous(    ni1,j,k) = -force_viscous(    ni1,j,k)
                endif
+               ! torques
+               torque_hydrostatic(ni1,j,k) = fco.cross.force_hydrostatic(ni1,j,k)
+               torque_pressure(   ni1,j,k) = fco.cross.force_pressure(   ni1,j,k)
+               torque_viscous(    ni1,j,k) = fco.cross.force_viscous(    ni1,j,k)
             enddo
          enddo
       case(3,4)
@@ -370,6 +388,10 @@ contains
                   force_pressure(   i,nj1,k) = -force_pressure(   i,nj1,k)
                   force_viscous(    i,nj1,k) = -force_viscous(    i,nj1,k)
                endif
+               ! torques
+               torque_hydrostatic(i,nj1,k) = fco.cross.force_hydrostatic(i,nj1,k)
+               torque_pressure(   i,nj1,k) = fco.cross.force_pressure(   i,nj1,k)
+               torque_viscous(    i,nj1,k) = fco.cross.force_viscous(    i,nj1,k)
             enddo
          enddo
       case(5,6)
@@ -394,6 +416,10 @@ contains
                   force_pressure(   i,j,nk1) = -force_pressure(   i,j,nk1)
                   force_viscous(    i,j,nk1) = -force_viscous(    i,j,nk1)
                endif
+               ! torques
+               torque_hydrostatic(i,j,nk1) = fco.cross.force_hydrostatic(i,j,nk1)
+               torque_pressure(   i,j,nk1) = fco.cross.force_pressure(   i,j,nk1)
+               torque_viscous(    i,j,nk1) = fco.cross.force_viscous(    i,j,nk1)
             enddo
          enddo
       endselect

@@ -194,6 +194,18 @@ contains
             error=output%xml_writer%write_dataarray(data_name='force_viscous',x=sol%force_viscous(i1:i2,j1:j2,k1:k2)%x, &
                                                                               y=sol%force_viscous(i1:i2,j1:j2,k1:k2)%y, &
                                                                               z=sol%force_viscous(i1:i2,j1:j2,k1:k2)%z)
+            if (allocated(sol%torque_hydrostatic).and.present(patch)) &
+            error=output%xml_writer%write_dataarray(data_name='torque_hydrostatic',x=sol%torque_hydrostatic(i1:i2,j1:j2,k1:k2)%x, &
+                                                                                   y=sol%torque_hydrostatic(i1:i2,j1:j2,k1:k2)%y, &
+                                                                                   z=sol%torque_hydrostatic(i1:i2,j1:j2,k1:k2)%z)
+            if (allocated(sol%torque_pressure).and.present(patch)) &
+            error=output%xml_writer%write_dataarray(data_name='torque_pressure',x=sol%torque_pressure(i1:i2,j1:j2,k1:k2)%x, &
+                                                                                y=sol%torque_pressure(i1:i2,j1:j2,k1:k2)%y, &
+                                                                                z=sol%torque_pressure(i1:i2,j1:j2,k1:k2)%z)
+            if (allocated(sol%torque_viscous).and.present(patch)) &
+            error=output%xml_writer%write_dataarray(data_name='torque_viscous',x=sol%torque_viscous(i1:i2,j1:j2,k1:k2)%x, &
+                                                                               y=sol%torque_viscous(i1:i2,j1:j2,k1:k2)%y, &
+                                                                               z=sol%torque_viscous(i1:i2,j1:j2,k1:k2)%z)
             if (allocated(sol%yplus).and.present(patch)) &
             error=output%xml_writer%write_dataarray(data_name='yplus',x=sol%yplus(i1:i2,j1:j2,k1:k2),one_component=.true.)
             if (allocated(sol%tau).and.present(patch)) &

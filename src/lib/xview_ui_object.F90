@@ -48,6 +48,7 @@ type :: ui_object
    logical                      :: is_vtk=.true.            !< Output is VTK formatted.
    logical                      :: is_patch=.false.         !< Extract patch instead of whole volume.
    integer(I4P)                 :: patch                    !< Patch boundary conditions.
+   logical                      :: is_extsubzone=.false.    !< Input files contain extracted subzones instead regular files.
    logical                      :: do_compute_aux=.false.   !< Do auxiliaries (metrics, forces, running-avg...) computation.
    logical                      :: do_glob=.false.          !< Do glob files search, input file names become base name.
    logical                      :: do_postprocess=.false.   !< Do postprocess for Paraview/Tecplo visualization.
@@ -139,11 +140,13 @@ contains
    call self%cli%get(switch='--turbulent-eq',       val=turbulent_eq,             error=error) ; if (error/=0) stop
    call self%cli%get(switch='--compute-aux',        val=self%do_compute_aux,      error=error) ; if (error/=0) stop
    if (self%cli%run_command('postprocess')) then
-      call self%cli%get(group='postprocess',switch='--ascii',val=self%is_ascii,        error=error) ; if (error/=0) stop
-      call self%cli%get(group='postprocess',switch='--tec',  val=is_tec,               error=error) ; if (error/=0) stop
-      call self%cli%get(group='postprocess',switch='--vtk',  val=is_vtk,               error=error) ; if (error/=0) stop
-      call self%cli%get(group='postprocess',switch='--cell', val=self%is_cell_centered,error=error) ; if (error/=0) stop
-      call self%cli%get(group='postprocess',switch='--patch',val=self%patch,           error=error) ; if (error/=0) stop
+      call self%cli%get(group='postprocess',switch='--ascii',      val=self%is_ascii,        error=error) ; if (error/=0) stop
+      call self%cli%get(group='postprocess',switch='--tec',        val=is_tec,               error=error) ; if (error/=0) stop
+      call self%cli%get(group='postprocess',switch='--vtk',        val=is_vtk,               error=error) ; if (error/=0) stop
+      call self%cli%get(group='postprocess',switch='--cell',       val=self%is_cell_centered,error=error) ; if (error/=0) stop
+      call self%cli%get(group='postprocess',switch='--patch',      val=self%patch,           error=error) ; if (error/=0) stop
+      call self%cli%get(group='postprocess',switch='--ext-subzone',val=self%is_extsubzone,   error=error) ; if (error/=0) stop
+
       if (self%cli%is_passed(group='postprocess', switch='--patch')) self%is_patch=.true.
    endif
    if (self%is_dns) then
@@ -406,6 +409,15 @@ contains
                      act='store',                    &
                      def='-999',                     &
                      group='postprocess',            &
+                     error=error)
+   if (error/=0) stop
+
+   call self%cli%add(switch='--ext-subzone',                                         &
+                     help='postprocess extracted subzones instead of regular files', &
+                     required=.false.,                                               &
+                     act='store_true',                                               &
+                     def='.false.',                                                  &
+                     group='postprocess',                                            &
                      error=error)
    if (error/=0) stop
 
