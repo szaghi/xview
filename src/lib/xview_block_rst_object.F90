@@ -32,6 +32,7 @@ type :: block_rst_object
    real(R8P),    allocatable :: turbulent_kinetic_energy_dissipation(:,:,:) !< Turbulent kinetic energy dissipation field.
    logical                   :: has_aux=.false.                             !< Compute auxiliary variables.
    real(R8P),    allocatable :: lambda2(:,:,:)                              !< Variable to identify vortices (lambda 2).
+   real(R8P),    allocatable :: div2T(:,:,:)                                !< Double divergence of the Lighthill tensor.
    real(R8P),    allocatable :: qfactor(:,:,:)                              !< Variable to identify vortices (q factor).
    real(R8P),    allocatable :: helicity(:,:,:)                             !< Helicity.
    type(vector), allocatable :: vorticity(:,:,:)                            !< Vorticity.
@@ -89,6 +90,7 @@ contains
    if (allocated(self%turbulent_kinetic_energy_dissipation)) deallocate(self%turbulent_kinetic_energy_dissipation)
    self%has_aux = .false.
    if (allocated(self%lambda2))            deallocate(self%lambda2)
+   if (allocated(self%div2T))              deallocate(self%div2T)
    if (allocated(self%qfactor))            deallocate(self%qfactor)
    if (allocated(self%helicity))           deallocate(self%helicity)
    if (allocated(self%vorticity))          deallocate(self%vorticity)
@@ -125,6 +127,7 @@ contains
    endif
    if (self%has_aux) then
       allocate(self%lambda2(           1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6))) ; self%lambda2            = 0._R8P
+      allocate(self%div2T(             1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6))) ; self%div2T              = 0._R8P
       allocate(self%qfactor(           1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6))) ; self%qfactor            = 0._R8P
       allocate(self%helicity(          1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6))) ; self%helicity           = 0._R8P
       allocate(self%vorticity(         1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6))) ; self%vorticity          = 0._R8P
@@ -148,18 +151,26 @@ contains
    real(R8P), allocatable                 :: Fi(:,:,:,:,:)                 !< Fluxes i direction.
    real(R8P), allocatable                 :: Fj(:,:,:,:,:)                 !< Fluxes j direction.
    real(R8P), allocatable                 :: Fk(:,:,:,:,:)                 !< Fluxes k direction.
+   real(R8P), allocatable                 :: F2i(:,:,:,:,:)                !< Second Fluxes i direction.
+   real(R8P), allocatable                 :: F2j(:,:,:,:,:)                !< Second Fluxes j direction.
+   real(R8P), allocatable                 :: F2k(:,:,:,:,:)                !< Second Fluxes k direction.
    type(vector)                           :: um                            !< Dummy vector variables.
+   type(vector)                           :: divT                          !< Dummy vector variables, divergence of Lighthill Tensor
    real(R8P)                              :: c(0:2),emin,emax,eval,fval,mu !< Dummy reals.
-   real(R8P), dimension(3,3)              :: IDEN,G,S,O                    !< Matrices.
+   real(R8P), dimension(3,3)              :: IDEN,G,G2,S,O                 !< Matrices.
    integer(I4P)                           :: i,j,k,ii,jj,kk,iter           !< Counter.
    real(R8P), parameter                   :: EPS6=1d-6, EPS9=1d-9          !< Tolerances.
 
    associate(Ni=>self%Ni, Nj=>self%Nj, Nk=>self%Nk, gc=>self%gc,                 &
              NFiS=>grd%NFiS, NFjS=>grd%NFjS, NFkS=>grd%NFkS, volume=>grd%volume, &
-             momentum=>self%momentum,lambda2=>self%lambda2,qfactor=>self%qfactor,helicity=>self%helicity,vorticity=>self%vorticity)
-   allocate(Fi(1:3,1:3,0-gc(1):Ni+gc(2),0-gc(3):Nj+gc(4),0-gc(5):Nk+gc(6)))
-   allocate(Fj(1:3,1:3,0-gc(1):Ni+gc(2),0-gc(3):Nj+gc(4),0-gc(5):Nk+gc(6)))
-   allocate(Fk(1:3,1:3,0-gc(1):Ni+gc(2),0-gc(3):Nj+gc(4),0-gc(5):Nk+gc(6)))
+             momentum=>self%momentum,div2T=>self%div2T, lambda2=>self%lambda2,qfactor=>self%qfactor, &
+             helicity=>self%helicity,vorticity=>self%vorticity)
+   allocate(Fi (1:3,1:3,0-gc(1):Ni+gc(2),0-gc(3):Nj+gc(4),0-gc(5):Nk+gc(6)))
+   allocate(Fj (1:3,1:3,0-gc(1):Ni+gc(2),0-gc(3):Nj+gc(4),0-gc(5):Nk+gc(6)))
+   allocate(Fk (1:3,1:3,0-gc(1):Ni+gc(2),0-gc(3):Nj+gc(4),0-gc(5):Nk+gc(6)))
+   allocate(F2i(1:3,1:3,0-gc(1):Ni+gc(2),0-gc(3):Nj+gc(4),0-gc(5):Nk+gc(6)))
+   allocate(F2j(1:3,1:3,0-gc(1):Ni+gc(2),0-gc(3):Nj+gc(4),0-gc(5):Nk+gc(6)))
+   allocate(F2k(1:3,1:3,0-gc(1):Ni+gc(2),0-gc(3):Nj+gc(4),0-gc(5):Nk+gc(6)))
 
    Fi   = 0._R8P
    Fj   = 0._R8P
@@ -196,15 +207,24 @@ contains
       do j=0,Nj+1
          do i=-1,Ni+1
             um = 0.5_R8P*(momentum(i,j,k)+momentum(i+1,j,k))
-            Fi(1,1,i,j,k) = um%x*NFiS(i,j,k)%x
-            Fi(1,2,i,j,k) = um%x*NFiS(i,j,k)%y
-            Fi(1,3,i,j,k) = um%x*NFiS(i,j,k)%z
-            Fi(2,1,i,j,k) = um%y*NFiS(i,j,k)%x
-            Fi(2,2,i,j,k) = um%y*NFiS(i,j,k)%y
-            Fi(2,3,i,j,k) = um%y*NFiS(i,j,k)%z
-            Fi(3,1,i,j,k) = um%z*NFiS(i,j,k)%x
-            Fi(3,2,i,j,k) = um%z*NFiS(i,j,k)%y
-            Fi(3,3,i,j,k) = um%z*NFiS(i,j,k)%z
+            Fi(1,1,i,j,k)  = um%x*NFiS(i,j,k)%x
+            Fi(1,2,i,j,k)  = um%x*NFiS(i,j,k)%y
+            Fi(1,3,i,j,k)  = um%x*NFiS(i,j,k)%z
+            Fi(2,1,i,j,k)  = um%y*NFiS(i,j,k)%x
+            Fi(2,2,i,j,k)  = um%y*NFiS(i,j,k)%y
+            Fi(2,3,i,j,k)  = um%y*NFiS(i,j,k)%z
+            Fi(3,1,i,j,k)  = um%z*NFiS(i,j,k)%x
+            Fi(3,2,i,j,k)  = um%z*NFiS(i,j,k)%y
+            Fi(3,3,i,j,k)  = um%z*NFiS(i,j,k)%z
+            F2i(1,1,i,j,k) = (um%x*um%x)*NFiS(i,j,k)%x
+            F2i(1,2,i,j,k) = (um%x*um%y)*NFiS(i,j,k)%y
+            F2i(1,3,i,j,k) = (um%x*um%z)*NFiS(i,j,k)%z
+            F2i(2,1,i,j,k) = F2i(1,2,i,j,k)!(um%y*um%x)*NFiS(i,j,k)%x
+            F2i(2,2,i,j,k) = (um%y*um%y)*NFiS(i,j,k)%y
+            F2i(2,3,i,j,k) = (um%y*um%z)*NFiS(i,j,k)%z
+            F2i(3,1,i,j,k) = F2i(1,3,i,j,k)!(um%z*um%x)*NFiS(i,j,k)%x
+            F2i(3,2,i,j,k) = F2i(2,3,i,j,k)!(um%z*um%y)*NFiS(i,j,k)%y
+            F2i(3,3,i,j,k) = (um%z*um%z)*NFiS(i,j,k)%z
          enddo
       enddo
    enddo
@@ -213,15 +233,24 @@ contains
       do j=-1,Nj+1
          do i=0,Ni+1
             um = 0.5_R8P*(momentum(i,j,k)+momentum(i,j+1,k))
-            Fj(1,1,i,j,k) = um%x*NFjS(i,j,k)%x
-            Fj(1,2,i,j,k) = um%x*NFjS(i,j,k)%y
-            Fj(1,3,i,j,k) = um%x*NFjS(i,j,k)%z
-            Fj(2,1,i,j,k) = um%y*NFjS(i,j,k)%x
-            Fj(2,2,i,j,k) = um%y*NFjS(i,j,k)%y
-            Fj(2,3,i,j,k) = um%y*NFjS(i,j,k)%z
-            Fj(3,1,i,j,k) = um%z*NFjS(i,j,k)%x
-            Fj(3,2,i,j,k) = um%z*NFjS(i,j,k)%y
-            Fj(3,3,i,j,k) = um%z*NFjS(i,j,k)%z
+            Fj(1,1,i,j,k)  = um%x*NFjS(i,j,k)%x
+            Fj(1,2,i,j,k)  = um%x*NFjS(i,j,k)%y
+            Fj(1,3,i,j,k)  = um%x*NFjS(i,j,k)%z
+            Fj(2,1,i,j,k)  = um%y*NFjS(i,j,k)%x
+            Fj(2,2,i,j,k)  = um%y*NFjS(i,j,k)%y
+            Fj(2,3,i,j,k)  = um%y*NFjS(i,j,k)%z
+            Fj(3,1,i,j,k)  = um%z*NFjS(i,j,k)%x
+            Fj(3,2,i,j,k)  = um%z*NFjS(i,j,k)%y
+            Fj(3,3,i,j,k)  = um%z*NFjS(i,j,k)%z
+            F2j(1,1,i,j,k) = (um%x*um%x)*NFjS(i,j,k)%x
+            F2j(1,2,i,j,k) = (um%x*um%y)*NFjS(i,j,k)%y
+            F2j(1,3,i,j,k) = (um%x*um%z)*NFjS(i,j,k)%z
+            F2j(2,1,i,j,k) = F2j(1,2,i,j,k)!(um%y*um%x)*NFjS(i,j,k)%x
+            F2j(2,2,i,j,k) = (um%y*um%y)*NFjS(i,j,k)%y
+            F2j(2,3,i,j,k) = (um%y*um%z)*NFjS(i,j,k)%z
+            F2j(3,1,i,j,k) = F2j(1,3,i,j,k)!(um%z*um%x)*NFjS(i,j,k)%x
+            F2j(3,2,i,j,k) = F2j(2,3,i,j,k)!(um%z*um%y)*NFjS(i,j,k)%y
+            F2j(3,3,i,j,k) = (um%z*um%z)*NFjS(i,j,k)%z
          enddo
       enddo
    enddo
@@ -230,15 +259,24 @@ contains
       do j=0,Nj+1
          do i=0,Ni+1
             um = 0.5_R8P*(momentum(i,j,k)+momentum(i,j,k+1))
-            Fk(1,1,i,j,k) = um%x*NFkS(i,j,k)%x
-            Fk(1,2,i,j,k) = um%x*NFkS(i,j,k)%y
-            Fk(1,3,i,j,k) = um%x*NFkS(i,j,k)%z
-            Fk(2,1,i,j,k) = um%y*NFkS(i,j,k)%x
-            Fk(2,2,i,j,k) = um%y*NFkS(i,j,k)%y
-            Fk(2,3,i,j,k) = um%y*NFkS(i,j,k)%z
-            Fk(3,1,i,j,k) = um%z*NFkS(i,j,k)%x
-            Fk(3,2,i,j,k) = um%z*NFkS(i,j,k)%y
-            Fk(3,3,i,j,k) = um%z*NFkS(i,j,k)%z
+            Fk(1,1,i,j,k)  = um%x*NFkS(i,j,k)%x
+            Fk(1,2,i,j,k)  = um%x*NFkS(i,j,k)%y
+            Fk(1,3,i,j,k)  = um%x*NFkS(i,j,k)%z
+            Fk(2,1,i,j,k)  = um%y*NFkS(i,j,k)%x
+            Fk(2,2,i,j,k)  = um%y*NFkS(i,j,k)%y
+            Fk(2,3,i,j,k)  = um%y*NFkS(i,j,k)%z
+            Fk(3,1,i,j,k)  = um%z*NFkS(i,j,k)%x
+            Fk(3,2,i,j,k)  = um%z*NFkS(i,j,k)%y
+            Fk(3,3,i,j,k)  = um%z*NFkS(i,j,k)%z
+            F2k(1,1,i,j,k) = (um%x*um%x)*NFkS(i,j,k)%x
+            F2k(1,2,i,j,k) = (um%x*um%y)*NFkS(i,j,k)%y
+            F2k(1,3,i,j,k) = (um%x*um%z)*NFkS(i,j,k)%z
+            F2k(2,1,i,j,k) = F2k(1,2,i,j,k)!(um%y*um%x)*NFkS(i,j,k)%x
+            F2k(2,2,i,j,k) = (um%y*um%y)*NFkS(i,j,k)%y
+            F2k(2,3,i,j,k) = (um%y*um%z)*NFkS(i,j,k)%z
+            F2k(3,1,i,j,k) = F2k(1,3,i,j,k)!(um%z*um%x)*NFkS(i,j,k)%x
+            F2k(3,2,i,j,k) = F2k(2,3,i,j,k)!(um%z*um%y)*NFkS(i,j,k)%y
+            F2k(3,3,i,j,k) = (um%z*um%z)*NFkS(i,j,k)%z
          enddo
       enddo
    enddo
@@ -249,18 +287,26 @@ contains
             ! compute velocity gradient
             do jj=1,3
                do ii=1,3
-                  G(ii,jj) = FI(ii,jj,i,j,k)-FI(ii,jj,i-1,j,k)&
-                           + FJ(ii,jj,i,j,k)-FJ(ii,jj,i,j-1,k)&
-                           + FK(ii,jj,i,j,k)-FK(ii,jj,i,j,k-1)
-                  G(ii,jj) = G(ii,jj)/max(eps6*eps6,volume(i,j,k))
+                  G(ii,jj)  = FI(ii,jj,i,j,k)-FI(ii,jj,i-1,j,k)&
+                            + FJ(ii,jj,i,j,k)-FJ(ii,jj,i,j-1,k)&
+                            + FK(ii,jj,i,j,k)-FK(ii,jj,i,j,k-1)
+                  G(ii,jj)  = G(ii,jj)/max(eps6*eps6,volume(i,j,k))
+
+                  G2(ii,jj) = F2I(ii,jj,i,j,k)-F2I(ii,jj,i-1,j,k)&
+                            + F2J(ii,jj,i,j,k)-F2J(ii,jj,i,j-1,k)&
+                            + F2K(ii,jj,i,j,k)-F2K(ii,jj,i,j,k-1)
+                  G2(ii,jj) = G2(ii,jj)/max(eps6*eps6,volume(i,j,k))
                enddo
             enddo
 
             ! compute vorticity vector
-            um%x =   (G(3,2) - G(2,3))
-            um%y = - (G(1,3) - G(3,1)) ! control signs!!!!
-            um%z =   (G(2,1) - G(1,2))
+            um%x  =   (G(3,2) - G(2,3))
+            um%y  = - (G(1,3) - G(3,1)) ! control signs!!!!
+            um%z  =   (G(2,1) - G(1,2))
 
+            um2%x = (G2(1,1)+G2(1,2)+G2(1,3))
+            um2%y = (G2(2,1)+G2(2,2)+G2(2,3))
+            um2%z = (G2(3,1)+G2(3,2)+G2(3,3))
             ! tensor S^2 + O^2 (saved in G)
             S = 0._R8P
             O = 0._R8P
@@ -297,6 +343,8 @@ contains
                                        (dot_product(S(1,:),S(1,:)) + dot_product(S(2,:),S(2,:)) + dot_product(S(3,:),S(3,:))))
             helicity( i,j,k) = momentum(i,j,k).dot.um / (max(eps6*eps6,normL2(momentum(i,j,k))*normL2(um)))
             vorticity(i,j,k) = um
+
+            divT(     i,j,k) = um2
          enddo
       enddo
    enddo
