@@ -33,6 +33,7 @@ contains
    !< Destroy dynamic memory.
    class(file_vtk_object), intent(inout) :: self !< File data.
 
+   if (allocated(self%path     )) deallocate(self%path     )
    if (allocated(self%file_name)) deallocate(self%file_name)
    endsubroutine destroy
 

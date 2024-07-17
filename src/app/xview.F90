@@ -240,6 +240,7 @@ contains
    type(string), allocatable      :: tokens(:)       !< String tokens buffer.
    type(file_esz_object)          :: file_esz        !< File esz.
    type(file_vtk_object)          :: file_vtk        !< File VTK.
+   type(file_tec_object)          :: file_tec        !< File TEC.
 
    if (filename_esz/=OPT_UNSET) call file_esz%load_file(filename=ipath//filename_esz, verbose=ui%verbose, &
                                                         is_level_set=ui%is_level_set,                     &
@@ -264,6 +265,32 @@ contains
                                            icc=file_esz%block_esz%icc, &
                                            sol=file_esz%block_esz%sol, &
                                            files_blocks=files_blocks)
+   endif
+   if (ui%is_tec) then
+      buffer = filename_esz
+      call buffer%split(tokens=tokens, sep='_I')
+      blocks_map(1) = 0_I4P
+      blocks_map(2) = tokens(2)%to_number(kind=1_I4P)
+      buffer = buffer%basename()
+      call file_tec%initialize(path=trim(adjustl(ui%opath)), &
+                               file_name=buffer%chars(),     &
+                               is_binary=.not.ui%is_ascii,   &
+                               is_cell_centered=.false.,     &
+                               is_icc=.true.,                &
+                               is_sol=.true.,                &
+                               is_level_set=ui%is_level_set, &
+                               is_zeroeq=ui%is_zeroeq,       &
+                               is_oneeq=ui%is_oneeq,         &
+                               is_twoeq=ui%is_twoeq,         &
+                               save_aux=.true.)
+      call file_tec%save_block_file_tec(is_binary=.not.ui%is_ascii, &
+                                        blocks_map=blocks_map,      &
+                                        grd=file_esz%block_esz%grd, &
+                                        is_cell_centered=.false.,   &
+                                        save_aux=.true.,            &
+                                        icc=file_esz%block_esz%icc, &
+                                        sol=file_esz%block_esz%sol)
+      call file_tec%finalize(is_binary=.not.ui%is_ascii)
    endif
    endsubroutine postprocess_esz
 
