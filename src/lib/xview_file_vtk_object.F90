@@ -172,6 +172,8 @@ contains
          if (save_aux) then
             ! if (allocated(grd%volume)) &
             ! error=output%xml_writer%write_dataarray(data_name='volume',x=grd%volume(i1:i2,j1:j2,k1:k2),one_component=.true.)
+            if (allocated(sol%div2T)) &
+            error=output%xml_writer%write_dataarray(data_name='div2T',x=sol%div2T(i1:i2,j1:j2,k1:k2),one_component=.true.)
             if (allocated(sol%lambda2)) &
             error=output%xml_writer%write_dataarray(data_name='lambda2',x=sol%lambda2(i1:i2,j1:j2,k1:k2),one_component=.true.)
             if (allocated(sol%qfactor)) &
