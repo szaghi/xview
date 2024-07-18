@@ -172,7 +172,7 @@ contains
    do i=1, 3
       IDEN(i,i) = 1._R8P
    enddo
-   call self%compute_gradient(grd=grd, var=momentum(0-gc(1):Ni+gc(2),0-gc(3):Nj+gc(4),0-gc(5):Nk+gc(6)), gv=G, tensor=.true.)
+   call self%compute_gradient(grd=grd, var=momentum, gv=G, tensor=.true.)
 
    do k=0,Nk+1
       do j=0,Nj+1
@@ -239,9 +239,9 @@ contains
              NFiS=>grd%NFiS, NFjS=>grd%NFjS, NFkS=>grd%NFkS, volume=>grd%volume, &
              momentum=>self%momentum,div2LT=>self%div2LT)
    allocate(G(1:3,1:3,0-gc(1):Ni+gc(2),0-gc(3):Nj+gc(4),0-gc(5):Nk+gc(6)))
-   allocate(divLT(0-gc(1):Ni+gc(2),0-gc(3):Nj+gc(4),0-gc(5):Nk+gc(6)))
+   allocate(divLT(    1-gc(1):Ni+gc(2),1-gc(3):Nj+gc(4),1-gc(5):Nk+gc(6)))
 
-   call self%compute_gradient(grd=grd, var=momentum(0-gc(1):Ni+gc(2),0-gc(3):Nj+gc(4),0-gc(5):Nk+gc(6)), gv=G, tensor=.true.)
+   call self%compute_gradient(grd=grd, var=momentum, gv=G, tensor=.true.)
    do k=0,Nk+1
       do j=0,Nj+1
          do i=0,Ni+1
@@ -251,7 +251,7 @@ contains
          enddo
       enddo
    enddo
-   call self%compute_gradient(grd=grd, var=divLT(0-gc(1):Ni+gc(2),0-gc(3):Nj+gc(4),0-gc(5):Nk+gc(6)), gv=G)
+   call self%compute_gradient(grd=grd, var=divLT, gv=G)
    do k=0,Nk+1
       do j=0,Nj+1
          do i=0,Ni+1
@@ -266,9 +266,9 @@ contains
    !< Return the (3D) gradient (by finite volume approach) of a vector (or diadic-tensor-like) in a block.
    class(block_rst_object),   intent(inout)        :: self               !< Block data.
    type(block_grd_object),    intent(in)           :: grd                !< Block grd data.
-   type(vector),              intent(inout)        :: var(0-self%gc(1):, &
-                                                          0-self%gc(3):, &
-                                                          0-self%gc(5):) !< Input vector.
+   type(vector),              intent(inout)        :: var(1-self%gc(1):, &
+                                                          1-self%gc(3):, &
+                                                          1-self%gc(5):) !< Input vector.
    real(R8P), allocatable,    intent(out)          :: gv(:,:,:,:,:)      !< Gradient.
    logical,                   intent(in), optional :: tensor             !< Input variable is a diadic-tensor-like.
    real(R8P), allocatable                          :: Fi(:,:,:,:,:)      !< Fluxes i direction.
@@ -359,14 +359,14 @@ contains
    real(R8P)                                     :: delta        !< Coefficient.
    real(R8P), parameter                          :: EPS12=1d-12  !< Tolerances.
 
-   vel0_%x = 0._R8P ; vel0_%y = 0._R8P ; vel0_%z = 0._R8P ; if (present(vel0)) vel0_ = vel0
+   vel0_ = 0._R8P ; if (present(vel0)) vel0_ = vel0
    associate(Ni=>self%Ni, Nj=>self%Nj, Nk=>self%Nk, gc=>self%gc,                 &
              NFiS=>grd%NFiS, NFjS=>grd%NFjS, NFkS=>grd%NFkS, volume=>grd%volume, &
              momentum=>self%momentum,k_ratio=>self%k_ratio)
    allocate(G(1:3,1:3,0-gc(1):Ni+gc(2),0-gc(3):Nj+gc(4),0-gc(5):Nk+gc(6)))
-   allocate(vel(0-gc(1):Ni+gc(2),0-gc(3):Nj+gc(4),0-gc(5):Nk+gc(6)))
+   allocate(vel(      1-gc(1):Ni+gc(2),1-gc(3):Nj+gc(4),1-gc(5):Nk+gc(6)))
 
-   call self%compute_gradient(grd=grd, var=momentum(0-gc(1):Ni+gc(2),0-gc(3):Nj+gc(4),0-gc(5):Nk+gc(6)), gv=G)
+   call self%compute_gradient(grd=grd, var=momentum, gv=G)
    do k=0,Nk+1
       do j=0,Nj+1
          do i=0,Ni+1
@@ -376,7 +376,7 @@ contains
          enddo
       enddo
    enddo
-   call self%compute_gradient(grd=grd, var=vel(0-gc(1):Ni+gc(2),0-gc(3):Nj+gc(4),0-gc(5):Nk+gc(6)), gv=G)
+   call self%compute_gradient(grd=grd, var=vel, gv=G)
    do k=0,Nk+1
       do j=0,Nj+1
          do i=0,Ni+1
@@ -387,7 +387,7 @@ contains
          enddo
       enddo
    enddo
-   call self%compute_gradient(grd=grd, var=vel(0-gc(1):Ni+gc(2),0-gc(3):Nj+gc(4),0-gc(5):Nk+gc(6)), gv=G)
+   call self%compute_gradient(grd=grd, var=vel, gv=G)
    do k=0,Nk+1
       do j=0,Nj+1
          do i=0,Ni+1
@@ -1079,9 +1079,9 @@ contains
    ! non TBP methods
    function gradient_cell(Fi, Fj, Fk, volume) result(gv)
    !< Return the (3D) gradient (by finite volume approach) of a scalar in a cell given its fluxes.
-   real(R8P), intent(in) :: Fi(3,3,2,2,2) !< Variable fluxes (3,3,i:i-1,j:j-1,k:k1) in i direction.
-   real(R8P), intent(in) :: Fj(3,3,2,2,2) !< Variable fluxes (3,3,i:i-1,j:j-1,k:k1) in j direction.
-   real(R8P), intent(in) :: Fk(3,3,2,2,2) !< Variable fluxes (3,3,i:i-1,j:j-1,k:k1) in k direction.
+   real(R8P), intent(in) :: Fi(3,3,2,2,2) !< Variable fluxes (3,3,i:i-1,j:j-1,k:k-1) in i direction.
+   real(R8P), intent(in) :: Fj(3,3,2,2,2) !< Variable fluxes (3,3,i:i-1,j:j-1,k:k-1) in j direction.
+   real(R8P), intent(in) :: Fk(3,3,2,2,2) !< Variable fluxes (3,3,i:i-1,j:j-1,k:k-1) in k direction.
    real(R8P), intent(in) :: volume        !< Cell volume.
    real(R8P)             :: gv(3,3)       !< Divergence.
    real(R8P), parameter  :: EPS12=1d-12   !< Tolerances.
