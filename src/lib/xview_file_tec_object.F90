@@ -125,13 +125,14 @@ contains
          self%tecvarname = self%tecvarname//' '//trim(vd)//'eps'//trim(vd)
       endif
       if (save_aux) then
-         self%nvar = self%nvar + 6 ! lamda2, qfactor, helicity, vorticity(x,y,z)
+         self%nvar = self%nvar + 7 ! lamda2, qfactor, helicity, vorticity(x,y,z), div2LT
          self%tecvarname = self%tecvarname//' '//trim(vd)//'lambda2'//trim(vd)
          self%tecvarname = self%tecvarname//' '//trim(vd)//'qfactor'//trim(vd)
          self%tecvarname = self%tecvarname//' '//trim(vd)//'helicity'//trim(vd)
          self%tecvarname = self%tecvarname//' '//trim(vd)//'vorticity_x'//trim(vd)
          self%tecvarname = self%tecvarname//' '//trim(vd)//'vorticity_y'//trim(vd)
          self%tecvarname = self%tecvarname//' '//trim(vd)//'vorticity_z'//trim(vd)
+         self%tecvarname = self%tecvarname//' '//trim(vd)//'div2LT'//trim(vd)
       endif
    endif
    allocate(self%tecnull(  1:self%nvar))
@@ -288,6 +289,7 @@ contains
                   error = tec_var(n=ncn, var=sol%vorticity(i1:i2,j1:j2,k1:k2)%x, d=1_I4P)
                   error = tec_var(n=ncn, var=sol%vorticity(i1:i2,j1:j2,k1:k2)%y, d=1_I4P)
                   error = tec_var(n=ncn, var=sol%vorticity(i1:i2,j1:j2,k1:k2)%z, d=1_I4P)
+                  error = tec_var(n=ncn, var=sol%div2LT(i1:i2,j1:j2,k1:k2),      d=1_I4P)
                endif
             endif
          endif

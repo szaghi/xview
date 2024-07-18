@@ -123,7 +123,7 @@ contains
                   enddo
                endif
                if (trim(ui%filename_rst)/=OPT_UNSET)  then
-                  call buffer%glob(pattern=trim(ui%ipath)//trim(ui%filename_rst)//'_*'//trim(adjustl(ui%grid_level))//'.p???',&
+                  call buffer%glob(pattern=trim(ui%ipath)//trim(ui%filename_rst)//'.*'//trim(adjustl(ui%grid_level))//'.p???',&
                                    list=filenames_rst)
                   if (allocated(filenames_rst)) then
                      if (size(filenames_rst, dim=1) /= files_number) then

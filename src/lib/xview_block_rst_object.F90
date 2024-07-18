@@ -32,13 +32,13 @@ type :: block_rst_object
    real(R8P),    allocatable :: turbulent_kinetic_energy_dissipation(:,:,:) !< Turbulent kinetic energy dissipation field.
    logical                   :: has_aux=.false.                             !< Compute auxiliary variables.
    real(R8P),    allocatable :: lambda2(:,:,:)                              !< Variable to identify vortices (lambda 2).
-   real(R8P),    allocatable :: div2T(:,:,:)                                !< Double divergence of the Lighthill tensor.
    real(R8P),    allocatable :: qfactor(:,:,:)                              !< Variable to identify vortices (q factor).
    real(R8P),    allocatable :: helicity(:,:,:)                             !< Helicity.
    type(vector), allocatable :: vorticity(:,:,:)                            !< Vorticity.
    real(R8P),    allocatable :: yplus(:,:,:)                                !< Estimation of y+.
    type(vector), allocatable :: tau(:,:,:)                                  !< Tau wall.
    real(R8P),    allocatable :: div_tau(:,:,:)                              !< Divergence of Tau wall.
+   real(R8P),    allocatable :: div2LT(:,:,:)                               !< Double divergence of Lighthill tensor.
    type(vector), allocatable :: force_hydrostatic(:,:,:)                    !< Hydrostic part of forces.
    type(vector), allocatable :: force_pressure(:,:,:)                       !< Pressure part of forces.
    type(vector), allocatable :: force_viscous(:,:,:)                        !< Viscous part of forces.
@@ -51,6 +51,8 @@ type :: block_rst_object
       procedure, pass(self) :: destroy                      !< Destroy dynamic memory.
       procedure, pass(self) :: alloc                        !< Allocate dynamic memory.
       procedure, pass(self) :: compute_aux                  !< Compute auxiliary varibles.
+      procedure, pass(self) :: compute_div2LT               !< Compute double divergence of Lighthill tensor.
+      procedure, pass(self) :: compute_gradient             !< Return the (3D) gradient of a vector.
       procedure, pass(self) :: compute_loads                !< Compute loads (forces and torques) on patches.
       procedure, pass(self) :: compute_yplus                !< Compute yplus on patches.
       procedure, pass(self) :: compute_tau                  !< Compute Tau wall and its divergence on patches.
@@ -68,6 +70,7 @@ type :: block_rst_object
 endtype block_rst_object
 
 contains
+   ! public methods
    elemental subroutine destroy(self)
    !< Destroy dynamic memory.
    class(block_rst_object), intent(inout) :: self !< Block data.
@@ -90,7 +93,7 @@ contains
    if (allocated(self%turbulent_kinetic_energy_dissipation)) deallocate(self%turbulent_kinetic_energy_dissipation)
    self%has_aux = .false.
    if (allocated(self%lambda2))            deallocate(self%lambda2)
-   if (allocated(self%div2T))              deallocate(self%div2T)
+   if (allocated(self%div2LT))             deallocate(self%div2LT)
    if (allocated(self%qfactor))            deallocate(self%qfactor)
    if (allocated(self%helicity))           deallocate(self%helicity)
    if (allocated(self%vorticity))          deallocate(self%vorticity)
@@ -127,7 +130,7 @@ contains
    endif
    if (self%has_aux) then
       allocate(self%lambda2(           1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6))) ; self%lambda2            = 0._R8P
-      allocate(self%div2T(             1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6))) ; self%div2T              = 0._R8P
+      allocate(self%div2LT(            1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6))) ; self%div2LT             = 0._R8P
       allocate(self%qfactor(           1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6))) ; self%qfactor            = 0._R8P
       allocate(self%helicity(          1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6))) ; self%helicity           = 0._R8P
       allocate(self%vorticity(         1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6))) ; self%vorticity          = 0._R8P
@@ -148,180 +151,49 @@ contains
    !< Compute auxiliary varibles.
    class(block_rst_object), intent(inout) :: self                          !< Block data.
    type(block_grd_object),  intent(in)    :: grd                           !< Block grd data.
-   real(R8P), allocatable                 :: Fi(:,:,:,:,:)                 !< Fluxes i direction.
-   real(R8P), allocatable                 :: Fj(:,:,:,:,:)                 !< Fluxes j direction.
-   real(R8P), allocatable                 :: Fk(:,:,:,:,:)                 !< Fluxes k direction.
-   real(R8P), allocatable                 :: F2i(:,:,:,:,:)                !< Second Fluxes i direction.
-   real(R8P), allocatable                 :: F2j(:,:,:,:,:)                !< Second Fluxes j direction.
-   real(R8P), allocatable                 :: F2k(:,:,:,:,:)                !< Second Fluxes k direction.
-   type(vector)                           :: um                            !< Dummy vector variables.
-   type(vector)                           :: divT                          !< Dummy vector variables, divergence of Lighthill Tensor
+   real(R8P), allocatable                 :: G(:,:,:,:,:)                  !< Gradient.
    real(R8P)                              :: c(0:2),emin,emax,eval,fval,mu !< Dummy reals.
-   real(R8P), dimension(3,3)              :: IDEN,G,G2,S,O                 !< Matrices.
+   type(vector)                           :: um                            !< Dummy vector.
+   real(R8P), dimension(3,3)              :: IDEN,SO,S,O                   !< Matrices.
    integer(I4P)                           :: i,j,k,ii,jj,kk,iter           !< Counter.
    real(R8P), parameter                   :: EPS6=1d-6, EPS9=1d-9          !< Tolerances.
 
-   associate(Ni=>self%Ni, Nj=>self%Nj, Nk=>self%Nk, gc=>self%gc,                 &
-             NFiS=>grd%NFiS, NFjS=>grd%NFjS, NFkS=>grd%NFkS, volume=>grd%volume, &
-             momentum=>self%momentum,div2T=>self%div2T, lambda2=>self%lambda2,qfactor=>self%qfactor, &
+   associate(Ni=>self%Ni, Nj=>self%Nj, Nk=>self%Nk, gc=>self%gc,                  &
+             NFiS=>grd%NFiS, NFjS=>grd%NFjS, NFkS=>grd%NFkS, volume=>grd%volume,  &
+             momentum=>self%momentum,lambda2=>self%lambda2,qfactor=>self%qfactor, &
              helicity=>self%helicity,vorticity=>self%vorticity)
-   allocate(Fi (1:3,1:3,0-gc(1):Ni+gc(2),0-gc(3):Nj+gc(4),0-gc(5):Nk+gc(6)))
-   allocate(Fj (1:3,1:3,0-gc(1):Ni+gc(2),0-gc(3):Nj+gc(4),0-gc(5):Nk+gc(6)))
-   allocate(Fk (1:3,1:3,0-gc(1):Ni+gc(2),0-gc(3):Nj+gc(4),0-gc(5):Nk+gc(6)))
-   allocate(F2i(1:3,1:3,0-gc(1):Ni+gc(2),0-gc(3):Nj+gc(4),0-gc(5):Nk+gc(6)))
-   allocate(F2j(1:3,1:3,0-gc(1):Ni+gc(2),0-gc(3):Nj+gc(4),0-gc(5):Nk+gc(6)))
-   allocate(F2k(1:3,1:3,0-gc(1):Ni+gc(2),0-gc(3):Nj+gc(4),0-gc(5):Nk+gc(6)))
+   allocate(G(1:3,1:3,0-gc(1):Ni+gc(2),0-gc(3):Nj+gc(4),0-gc(5):Nk+gc(6)))
 
-   Fi   = 0._R8P
-   Fj   = 0._R8P
-   Fk   = 0._R8P
    IDEN = 0._R8P
    do i=1, 3
       IDEN(i,i) = 1._R8P
    enddo
-   ! extrapolate momentum from inner cells to ghost cells
-   do k=1,Nk
-      do j=1,Nj
-         momentum(1- gc(1),j,k) = 2._R8P*momentum(0,   j,k)-momentum(1, j,k)
-         momentum(Ni+gc(2),j,k) = 2._R8P*momentum(Ni+1,j,k)-momentum(Ni,j,k)
-      enddo
-   enddo
-   do k=1,Nk
-      do i=0,Ni+1
-         momentum(i,1- gc(3),k) = 2._R8P*momentum(i,0,   k)-momentum(i,1, k)
-         momentum(i,Nj+gc(4),k) = 2._R8P*momentum(i,Nj+1,k)-momentum(i,Nj,k)
-      enddo
-   enddo
-   do j=0,Nj+1
-      do i=0,Ni+1
-         momentum(i,j,1- gc(5)) = 2._R8P*momentum(i,j,0   )-momentum(i,j,1 )
-         momentum(i,j,Nk+gc(6)) = 2._R8P*momentum(i,j,Nk+1)-momentum(i,j,Nk)
-      enddo
-   enddo
-   ! compute fluxes
-   !$omp parallel default(none) &
-   !$omp private(i,j,k,um)      &
-   !$omp shared(Ni,Nj,Nk,Fi,Fj,Fk,NFiS,NFjS,NFkS,momentum)
-   !$omp do
-   do k=0,Nk+1
-      do j=0,Nj+1
-         do i=-1,Ni+1
-            um = 0.5_R8P*(momentum(i,j,k)+momentum(i+1,j,k))
-            Fi(1,1,i,j,k)  = um%x*NFiS(i,j,k)%x
-            Fi(1,2,i,j,k)  = um%x*NFiS(i,j,k)%y
-            Fi(1,3,i,j,k)  = um%x*NFiS(i,j,k)%z
-            Fi(2,1,i,j,k)  = um%y*NFiS(i,j,k)%x
-            Fi(2,2,i,j,k)  = um%y*NFiS(i,j,k)%y
-            Fi(2,3,i,j,k)  = um%y*NFiS(i,j,k)%z
-            Fi(3,1,i,j,k)  = um%z*NFiS(i,j,k)%x
-            Fi(3,2,i,j,k)  = um%z*NFiS(i,j,k)%y
-            Fi(3,3,i,j,k)  = um%z*NFiS(i,j,k)%z
-            F2i(1,1,i,j,k) = (um%x*um%x)*NFiS(i,j,k)%x
-            F2i(1,2,i,j,k) = (um%x*um%y)*NFiS(i,j,k)%y
-            F2i(1,3,i,j,k) = (um%x*um%z)*NFiS(i,j,k)%z
-            F2i(2,1,i,j,k) = F2i(1,2,i,j,k)!(um%y*um%x)*NFiS(i,j,k)%x
-            F2i(2,2,i,j,k) = (um%y*um%y)*NFiS(i,j,k)%y
-            F2i(2,3,i,j,k) = (um%y*um%z)*NFiS(i,j,k)%z
-            F2i(3,1,i,j,k) = F2i(1,3,i,j,k)!(um%z*um%x)*NFiS(i,j,k)%x
-            F2i(3,2,i,j,k) = F2i(2,3,i,j,k)!(um%z*um%y)*NFiS(i,j,k)%y
-            F2i(3,3,i,j,k) = (um%z*um%z)*NFiS(i,j,k)%z
-         enddo
-      enddo
-   enddo
-   !$omp do
-   do k=0,Nk+1
-      do j=-1,Nj+1
-         do i=0,Ni+1
-            um = 0.5_R8P*(momentum(i,j,k)+momentum(i,j+1,k))
-            Fj(1,1,i,j,k)  = um%x*NFjS(i,j,k)%x
-            Fj(1,2,i,j,k)  = um%x*NFjS(i,j,k)%y
-            Fj(1,3,i,j,k)  = um%x*NFjS(i,j,k)%z
-            Fj(2,1,i,j,k)  = um%y*NFjS(i,j,k)%x
-            Fj(2,2,i,j,k)  = um%y*NFjS(i,j,k)%y
-            Fj(2,3,i,j,k)  = um%y*NFjS(i,j,k)%z
-            Fj(3,1,i,j,k)  = um%z*NFjS(i,j,k)%x
-            Fj(3,2,i,j,k)  = um%z*NFjS(i,j,k)%y
-            Fj(3,3,i,j,k)  = um%z*NFjS(i,j,k)%z
-            F2j(1,1,i,j,k) = (um%x*um%x)*NFjS(i,j,k)%x
-            F2j(1,2,i,j,k) = (um%x*um%y)*NFjS(i,j,k)%y
-            F2j(1,3,i,j,k) = (um%x*um%z)*NFjS(i,j,k)%z
-            F2j(2,1,i,j,k) = F2j(1,2,i,j,k)!(um%y*um%x)*NFjS(i,j,k)%x
-            F2j(2,2,i,j,k) = (um%y*um%y)*NFjS(i,j,k)%y
-            F2j(2,3,i,j,k) = (um%y*um%z)*NFjS(i,j,k)%z
-            F2j(3,1,i,j,k) = F2j(1,3,i,j,k)!(um%z*um%x)*NFjS(i,j,k)%x
-            F2j(3,2,i,j,k) = F2j(2,3,i,j,k)!(um%z*um%y)*NFjS(i,j,k)%y
-            F2j(3,3,i,j,k) = (um%z*um%z)*NFjS(i,j,k)%z
-         enddo
-      enddo
-   enddo
-   !$omp do
-   do k=-1,Nk+1
-      do j=0,Nj+1
-         do i=0,Ni+1
-            um = 0.5_R8P*(momentum(i,j,k)+momentum(i,j,k+1))
-            Fk(1,1,i,j,k)  = um%x*NFkS(i,j,k)%x
-            Fk(1,2,i,j,k)  = um%x*NFkS(i,j,k)%y
-            Fk(1,3,i,j,k)  = um%x*NFkS(i,j,k)%z
-            Fk(2,1,i,j,k)  = um%y*NFkS(i,j,k)%x
-            Fk(2,2,i,j,k)  = um%y*NFkS(i,j,k)%y
-            Fk(2,3,i,j,k)  = um%y*NFkS(i,j,k)%z
-            Fk(3,1,i,j,k)  = um%z*NFkS(i,j,k)%x
-            Fk(3,2,i,j,k)  = um%z*NFkS(i,j,k)%y
-            Fk(3,3,i,j,k)  = um%z*NFkS(i,j,k)%z
-            F2k(1,1,i,j,k) = (um%x*um%x)*NFkS(i,j,k)%x
-            F2k(1,2,i,j,k) = (um%x*um%y)*NFkS(i,j,k)%y
-            F2k(1,3,i,j,k) = (um%x*um%z)*NFkS(i,j,k)%z
-            F2k(2,1,i,j,k) = F2k(1,2,i,j,k)!(um%y*um%x)*NFkS(i,j,k)%x
-            F2k(2,2,i,j,k) = (um%y*um%y)*NFkS(i,j,k)%y
-            F2k(2,3,i,j,k) = (um%y*um%z)*NFkS(i,j,k)%z
-            F2k(3,1,i,j,k) = F2k(1,3,i,j,k)!(um%z*um%x)*NFkS(i,j,k)%x
-            F2k(3,2,i,j,k) = F2k(2,3,i,j,k)!(um%z*um%y)*NFkS(i,j,k)%y
-            F2k(3,3,i,j,k) = (um%z*um%z)*NFkS(i,j,k)%z
-         enddo
-      enddo
-   enddo
-   !$omp end parallel
-   do k=0,Nk+1
-      do j=0,Nj+1
-         do i=0,Ni+1
-            ! compute velocity gradient
-            do jj=1,3
-               do ii=1,3
-                  G(ii,jj)  = FI(ii,jj,i,j,k)-FI(ii,jj,i-1,j,k)&
-                            + FJ(ii,jj,i,j,k)-FJ(ii,jj,i,j-1,k)&
-                            + FK(ii,jj,i,j,k)-FK(ii,jj,i,j,k-1)
-                  G(ii,jj)  = G(ii,jj)/max(eps6*eps6,volume(i,j,k))
+   call self%compute_gradient(grd=grd, var=momentum(0-gc(1):Ni+gc(2),0-gc(3):Nj+gc(4),0-gc(5):Nk+gc(6)), gv=G, tensor=.true.)
 
-                  G2(ii,jj) = F2I(ii,jj,i,j,k)-F2I(ii,jj,i-1,j,k)&
-                            + F2J(ii,jj,i,j,k)-F2J(ii,jj,i,j-1,k)&
-                            + F2K(ii,jj,i,j,k)-F2K(ii,jj,i,j,k-1)
-                  G2(ii,jj) = G2(ii,jj)/max(eps6*eps6,volume(i,j,k))
-               enddo
-            enddo
-
+   do k=0,Nk+1
+      do j=0,Nj+1
+         do i=0,Ni+1
             ! compute vorticity vector
-            um%x  =   (G(3,2) - G(2,3))
-            um%y  = - (G(1,3) - G(3,1)) ! control signs!!!!
-            um%z  =   (G(2,1) - G(1,2))
+            um%x =  (G(3,2,i,j,k) - G(2,3,i,j,k))
+            um%y = -(G(1,3,i,j,k) - G(3,1,i,j,k)) ! control signs!!!!
+            um%z =  (G(2,1,i,j,k) - G(1,2,i,j,k))
 
-            um2%x = (G2(1,1)+G2(1,2)+G2(1,3))
-            um2%y = (G2(2,1)+G2(2,2)+G2(2,3))
-            um2%z = (G2(3,1)+G2(3,2)+G2(3,3))
             ! tensor S^2 + O^2 (saved in G)
             S = 0._R8P
             O = 0._R8P
             do kk=1,3
                do jj=1,3
-                  S(jj,kk) = 0.5_R8P*(G(jj,kk)+G(kk,jj))
-                  O(jj,kk) = 0.5_R8P*(G(jj,kk)-G(kk,jj))
+                  S(jj,kk) = 0.5_R8P*(G(jj,kk,i,j,k)+G(kk,jj,i,j,k))
+                  O(jj,kk) = 0.5_R8P*(G(jj,kk,i,j,k)-G(kk,jj,i,j,k))
                enddo
             enddo
-            G = matmul(S,S) + matmul(O,O)
+            SO = matmul(S,S) + matmul(O,O)
 
             ! coefficients of characterist polynomial: lamda^3 + c(2)*lamda^2 + c(1)*lamda + c(0) = 0
-            c(2) = -(G(1,1) + G(2,2) + G(3,3))
-            c(1) = G(1,1)*G(2,2) + G(1,1)*G(3,3) + G(2,2)*G(3,3) - G(2,3)**2 - G(1,3)**2 - G(1,2)**2
-            c(0) = G(1,1)*G(2,3)**2 + G(2,2)*G(1,3)**2 + G(3,3)*G(1,2)**2 - 2._R8P*G(2,3)*G(1,3)*G(1,2) - G(1,1)*G(2,2)*G(3,3)
+            c(2) = -(SO(1,1) + SO(2,2) + SO(3,3))
+            c(1) = SO(1,1)*SO(2,2) + SO(1,1)*SO(3,3) + SO(2,2)*SO(3,3) - SO(2,3)**2 - SO(1,3)**2 - SO(1,2)**2
+            c(0) = SO(1,1)*SO(2,3)**2 + SO(2,2)*SO(1,3)**2 + SO(3,3)*SO(1,2)**2 - 2._R8P*SO(2,3)*SO(1,3)*SO(1,2) &
+                   - SO(1,1)*SO(2,2)*SO(3,3)
 
             ! compute second eigenvalue of characteristic polynomial
             mu = sqrt(c(2)**2 - 3._R8P*c(1))
@@ -343,13 +215,129 @@ contains
                                        (dot_product(S(1,:),S(1,:)) + dot_product(S(2,:),S(2,:)) + dot_product(S(3,:),S(3,:))))
             helicity( i,j,k) = momentum(i,j,k).dot.um / (max(eps6*eps6,normL2(momentum(i,j,k))*normL2(um)))
             vorticity(i,j,k) = um
-
-            divT(     i,j,k) = um2
          enddo
       enddo
    enddo
    endassociate
+   call self%compute_div2LT(grd=grd)
    endsubroutine compute_aux
+
+   subroutine compute_div2LT(self, grd)
+   !< Compute double divergence of Lighthill tensor.
+   class(block_rst_object), intent(inout) :: self          !< Block data.
+   type(block_grd_object),  intent(in)    :: grd           !< Block grd data.
+   real(R8P), allocatable                 :: G(:,:,:,:,:)  !< Gradient.
+   type(vector), allocatable              :: divLT(:,:,:)  !< Divergence of LT.
+   integer(I4P)                           :: i,j,k         !< Counter.
+
+   associate(Ni=>self%Ni, Nj=>self%Nj, Nk=>self%Nk, gc=>self%gc,                 &
+             NFiS=>grd%NFiS, NFjS=>grd%NFjS, NFkS=>grd%NFkS, volume=>grd%volume, &
+             momentum=>self%momentum,div2LT=>self%div2LT)
+   allocate(G(1:3,1:3,0-gc(1):Ni+gc(2),0-gc(3):Nj+gc(4),0-gc(5):Nk+gc(6)))
+   allocate(divLT(0-gc(1):Ni+gc(2),0-gc(3):Nj+gc(4),0-gc(5):Nk+gc(6)))
+
+   call self%compute_gradient(grd=grd, var=momentum(0-gc(1):Ni+gc(2),0-gc(3):Nj+gc(4),0-gc(5):Nk+gc(6)), gv=G, tensor=.true.)
+   do k=0,Nk+1
+      do j=0,Nj+1
+         do i=0,Ni+1
+            divLT(i,j,k)%x = G(1,1,i,j,k)+G(1,2,i,j,k)+G(1,3,i,j,k) ! dvar%x.var%x/dx + dvar%x.var%y/dy + dvar%x.var%z/dz
+            divLT(i,j,k)%y = G(2,1,i,j,k)+G(2,2,i,j,k)+G(2,3,i,j,k) ! dvar%y.var%x/dx + dvar%y.var%y/dy + dvar%y.var%z/dz
+            divLT(i,j,k)%z = G(3,1,i,j,k)+G(3,2,i,j,k)+G(3,3,i,j,k) ! dvar%z.var%x/dx + dvar%z.var%y/dy + dvar%z.var%z/dz
+         enddo
+      enddo
+   enddo
+   call self%compute_gradient(grd=grd, var=divLT(0-gc(1):Ni+gc(2),0-gc(3):Nj+gc(4),0-gc(5):Nk+gc(6)), gv=G)
+   do k=0,Nk+1
+      do j=0,Nj+1
+         do i=0,Ni+1
+            div2LT(i,j,k) = G(1,1,i,j,k)+G(2,2,i,j,k)+G(3,3,i,j,k)  ! dvar%x/dx + dvar%y/dy + dvar%z/dz
+         enddo
+      enddo
+   enddo
+   endassociate
+   endsubroutine compute_div2LT
+
+   subroutine compute_gradient(self, grd, var, gv, tensor)
+   !< Return the (3D) gradient (by finite volume approach) of a vector (or diadic-tensor-like) in a block.
+   class(block_rst_object),   intent(inout)        :: self               !< Block data.
+   type(block_grd_object),    intent(in)           :: grd                !< Block grd data.
+   type(vector),              intent(inout)        :: var(0-self%gc(1):, &
+                                                          0-self%gc(3):, &
+                                                          0-self%gc(5):) !< Input vector.
+   real(R8P), allocatable,    intent(out)          :: gv(:,:,:,:,:)      !< Gradient.
+   logical,                   intent(in), optional :: tensor             !< Input variable is a diadic-tensor-like.
+   real(R8P), allocatable                          :: Fi(:,:,:,:,:)      !< Fluxes i direction.
+   real(R8P), allocatable                          :: Fj(:,:,:,:,:)      !< Fluxes j direction.
+   real(R8P), allocatable                          :: Fk(:,:,:,:,:)      !< Fluxes k direction.
+   type(vector)                                    :: vm                 !< Dummy vector variables.
+   integer(I4P)                                    :: i,j,k              !< Counter.
+
+   associate(Ni=>self%Ni, Nj=>self%Nj, Nk=>self%Nk, gc=>self%gc, &
+             NFiS=>grd%NFiS, NFjS=>grd%NFjS, NFkS=>grd%NFkS, volume=>grd%volume)
+   allocate(Fi(1:3,1:3,0-gc(1):Ni+gc(2),0-gc(3):Nj+gc(4),0-gc(5):Nk+gc(6)))
+   allocate(Fj(1:3,1:3,0-gc(1):Ni+gc(2),0-gc(3):Nj+gc(4),0-gc(5):Nk+gc(6)))
+   allocate(Fk(1:3,1:3,0-gc(1):Ni+gc(2),0-gc(3):Nj+gc(4),0-gc(5):Nk+gc(6)))
+   allocate(gv(1:3,1:3,0-gc(1):Ni+gc(2),0-gc(3):Nj+gc(4),0-gc(5):Nk+gc(6)))
+   Fi = 0._R8P
+   Fj = 0._R8P
+   Fk = 0._R8P
+   ! extrapolate var from inner cells to ghost cells
+   do k=1,Nk
+      do j=1,Nj
+         var(1- gc(1),j,k) = 2._R8P*var(0,   j,k)-var(1, j,k)
+         var(Ni+gc(2),j,k) = 2._R8P*var(Ni+1,j,k)-var(Ni,j,k)
+      enddo
+   enddo
+   do k=1,Nk
+      do i=0,Ni+1
+         var(i,1- gc(3),k) = 2._R8P*var(i,0,   k)-var(i,1, k)
+         var(i,Nj+gc(4),k) = 2._R8P*var(i,Nj+1,k)-var(i,Nj,k)
+      enddo
+   enddo
+   do j=0,Nj+1
+      do i=0,Ni+1
+         var(i,j,1- gc(5)) = 2._R8P*var(i,j,0   )-var(i,j,1 )
+         var(i,j,Nk+gc(6)) = 2._R8P*var(i,j,Nk+1)-var(i,j,Nk)
+      enddo
+   enddo
+   ! compute fluxes
+   do k=0,Nk+1
+      do j=0,Nj+1
+         do i=-1,Ni+1
+            vm = 0.5_R8P*(var(i,j,k)+var(i+1,j,k))
+            Fi(:,:,i,j,k) = fluxes(NFS=NFiS(i,j,k), var=vm, tensor=tensor)
+         enddo
+      enddo
+   enddo
+   do k=0,Nk+1
+      do j=-1,Nj+1
+         do i=0,Ni+1
+            vm = 0.5_R8P*(var(i,j,k)+var(i,j+1,k))
+            Fj(:,:,i,j,k) = fluxes(NFS=NFjS(i,j,k), var=vm, tensor=tensor)
+         enddo
+      enddo
+   enddo
+   do k=-1,Nk+1
+      do j=0,Nj+1
+         do i=0,Ni+1
+            vm = 0.5_R8P*(var(i,j,k)+var(i,j,k+1))
+            Fk(:,:,i,j,k) = fluxes(NFS=NFkS(i,j,k), var=vm, tensor=tensor)
+         enddo
+      enddo
+   enddo
+   do k=0,Nk+1
+      do j=0,Nj+1
+         do i=0,Ni+1
+            ! compute gradient
+            gv(:,:,i,j,k) = gradient_cell(Fi=Fi(:,:,i-1:i,j-1:j,k-1:k), &
+                                          Fj=Fj(:,:,i-1:i,j-1:j,k-1:k), &
+                                          Fk=Fk(:,:,i-1:i,j-1:j,k-1:k), &
+                                          volume=volume(i,j,k))
+         enddo
+      enddo
+   enddo
+   endassociate
+   endsubroutine compute_gradient
 
    subroutine compute_loads(self, grd, icc, patch, RE, rFR2, zfs)
    !< Compute loads (forces and torques) on patches.
@@ -1022,4 +1010,55 @@ contains
       endif
    endassociate
    endsubroutine save_solution
+
+   ! non TBP methods
+   function gradient_cell(Fi, Fj, Fk, volume) result(gv)
+   !< Return the (3D) gradient (by finite volume approach) of a scalar in a cell given its fluxes.
+   real(R8P), intent(in) :: Fi(3,3,2,2,2) !< Variable fluxes (3,3,i:i-1,j:j-1,k:k1) in i direction.
+   real(R8P), intent(in) :: Fj(3,3,2,2,2) !< Variable fluxes (3,3,i:i-1,j:j-1,k:k1) in j direction.
+   real(R8P), intent(in) :: Fk(3,3,2,2,2) !< Variable fluxes (3,3,i:i-1,j:j-1,k:k1) in k direction.
+   real(R8P), intent(in) :: volume        !< Cell volume.
+   real(R8P)             :: gv(3,3)       !< Divergence.
+   real(R8P), parameter  :: EPS12=1d-12   !< Tolerances.
+   integer(I4P)          :: i, j          !< Counter.
+
+   do j=1,3
+      do i=1,3
+         gv(i,j)  = Fi(i,j,2,2,2)-Fi(i,j,1,2,2) &
+                  + Fj(i,j,2,2,2)-Fj(i,j,2,1,2) &
+                  + Fk(i,j,2,2,2)-Fk(i,j,2,2,1)
+         gv(i,j)  = gv(i,j)/max(eps12,volume)
+      enddo
+   enddo
+   endfunction gradient_cell
+
+   function fluxes(NFS, var, tensor) result(F)
+   !< Return the fluxes of a vector (or diadic tensor).
+   type(vector), intent(in)           :: NFS    !< Cell metrics.
+   type(vector), intent(in)           :: var    !< Input variable.
+   logical,      intent(in), optional :: tensor !< Input variable is a tensor-like.
+   real(R8P)                          :: F(3,3) !< Variable fluxes.
+
+   if (present(tensor)) then
+      F(1,1) = (var%x*var%x)*NFS%x
+      F(1,2) = (var%x*var%y)*NFS%y
+      F(1,3) = (var%x*var%z)*NFS%z
+      F(2,1) = (var%y*var%x)*NFS%x
+      F(2,2) = (var%y*var%y)*NFS%y
+      F(2,3) = (var%y*var%z)*NFS%z
+      F(3,1) = (var%z*var%x)*NFS%x
+      F(3,2) = (var%z*var%y)*NFS%y
+      F(3,3) = (var%z*var%z)*NFS%z
+   else
+      F(1,1) = var%x*NFS%x
+      F(1,2) = var%x*NFS%y
+      F(1,3) = var%x*NFS%z
+      F(2,1) = var%y*NFS%x
+      F(2,2) = var%y*NFS%y
+      F(2,3) = var%y*NFS%z
+      F(3,1) = var%z*NFS%x
+      F(3,2) = var%z*NFS%y
+      F(3,3) = var%z*NFS%z
+   endif
+   endfunction fluxes
 endmodule xview_block_rst_object
