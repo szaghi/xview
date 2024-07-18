@@ -173,6 +173,8 @@ contains
          if (save_aux) then
             ! if (allocated(grd%volume)) &
             ! error=output%xml_writer%write_dataarray(data_name='volume',x=grd%volume(i1:i2,j1:j2,k1:k2),one_component=.true.)
+            if (allocated(sol%k_ratio)) &
+            error=output%xml_writer%write_dataarray(data_name='k_ratio',x=sol%k_ratio(i1:i2,j1:j2,k1:k2),one_component=.true.)
             if (allocated(sol%div2LT)) &
             error=output%xml_writer%write_dataarray(data_name='div2LT',x=sol%div2LT(i1:i2,j1:j2,k1:k2),one_component=.true.)
             if (allocated(sol%lambda2)) &

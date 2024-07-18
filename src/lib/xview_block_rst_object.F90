@@ -39,6 +39,7 @@ type :: block_rst_object
    type(vector), allocatable :: tau(:,:,:)                                  !< Tau wall.
    real(R8P),    allocatable :: div_tau(:,:,:)                              !< Divergence of Tau wall.
    real(R8P),    allocatable :: div2LT(:,:,:)                               !< Double divergence of Lighthill tensor.
+   real(R8P),    allocatable :: k_ratio(:,:,:)                              !< Kinetic energies ratio.
    type(vector), allocatable :: force_hydrostatic(:,:,:)                    !< Hydrostic part of forces.
    type(vector), allocatable :: force_pressure(:,:,:)                       !< Pressure part of forces.
    type(vector), allocatable :: force_viscous(:,:,:)                        !< Viscous part of forces.
@@ -53,6 +54,7 @@ type :: block_rst_object
       procedure, pass(self) :: compute_aux                  !< Compute auxiliary varibles.
       procedure, pass(self) :: compute_div2LT               !< Compute double divergence of Lighthill tensor.
       procedure, pass(self) :: compute_gradient             !< Return the (3D) gradient of a vector.
+      procedure, pass(self) :: compute_kinetic_energy_ratio !< Compute ratio of kinetic energies.
       procedure, pass(self) :: compute_loads                !< Compute loads (forces and torques) on patches.
       procedure, pass(self) :: compute_yplus                !< Compute yplus on patches.
       procedure, pass(self) :: compute_tau                  !< Compute Tau wall and its divergence on patches.
@@ -97,6 +99,7 @@ contains
    if (allocated(self%qfactor))            deallocate(self%qfactor)
    if (allocated(self%helicity))           deallocate(self%helicity)
    if (allocated(self%vorticity))          deallocate(self%vorticity)
+   if (allocated(self%k_ratio))            deallocate(self%k_ratio)
    if (allocated(self%yplus))              deallocate(self%yplus)
    if (allocated(self%tau))                deallocate(self%tau)
    if (allocated(self%div_tau))            deallocate(self%div_tau)
@@ -134,6 +137,7 @@ contains
       allocate(self%qfactor(           1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6))) ; self%qfactor            = 0._R8P
       allocate(self%helicity(          1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6))) ; self%helicity           = 0._R8P
       allocate(self%vorticity(         1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6))) ; self%vorticity          = 0._R8P
+      allocate(self%k_ratio(           1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6))) ; self%k_ratio            = 0._R8P
       allocate(self%yplus(             0-gc(1):Ni+gc(2), 0-gc(3):Nj+gc(4), 0-gc(5):Nk+gc(6))) ; self%yplus              = 0._R8P
       allocate(self%tau(               0-gc(1):Ni+gc(2), 0-gc(3):Nj+gc(4), 0-gc(5):Nk+gc(6))) ; self%tau                = 0._R8P
       allocate(self%div_tau(           0-gc(1):Ni+gc(2), 0-gc(3):Nj+gc(4), 0-gc(5):Nk+gc(6))) ; self%div_tau            = 0._R8P
@@ -220,6 +224,7 @@ contains
    enddo
    endassociate
    call self%compute_div2LT(grd=grd)
+   call self%compute_kinetic_energy_ratio(grd=grd)
    endsubroutine compute_aux
 
    subroutine compute_div2LT(self, grd)
@@ -338,6 +343,66 @@ contains
    enddo
    endassociate
    endsubroutine compute_gradient
+
+   subroutine compute_kinetic_energy_ratio(self, grd, vel0)
+   !< Compute ratio of modelled kinetic energy over total kinetic energy.
+   class(block_rst_object), intent(inout)        :: self         !< Block data.
+   type(block_grd_object),  intent(in)           :: grd          !< Block grd data.
+   type(vector),            intent(in), optional :: vel0         !< Undisturbed velocity.
+   type(vector)                                  :: vel0_        !< Undisturbed velocity, local var.
+   real(R8P), allocatable                        :: G(:,:,:,:,:) !< Gradient.
+   type(vector), allocatable                     :: vel(:,:,:)   !< Taylor expansion of velocity.
+   real(R8P)                                     :: div          !< Divergence of velocity.
+   real(R8P)                                     :: kmod         !< Modelled kinetic energy.
+   real(R8P)                                     :: kres         !< Resolved kinetic energy.
+   integer(I4P)                                  :: i,j,k        !< Counter.
+   real(R8P)                                     :: delta        !< Coefficient.
+   real(R8P), parameter                          :: EPS12=1d-12  !< Tolerances.
+
+   vel0_%x = 0._R8P ; vel0_%y = 0._R8P ; vel0_%z = 0._R8P ; if (present(vel0)) vel0_ = vel0
+   associate(Ni=>self%Ni, Nj=>self%Nj, Nk=>self%Nk, gc=>self%gc,                 &
+             NFiS=>grd%NFiS, NFjS=>grd%NFjS, NFkS=>grd%NFkS, volume=>grd%volume, &
+             momentum=>self%momentum,k_ratio=>self%k_ratio)
+   allocate(G(1:3,1:3,0-gc(1):Ni+gc(2),0-gc(3):Nj+gc(4),0-gc(5):Nk+gc(6)))
+   allocate(vel(0-gc(1):Ni+gc(2),0-gc(3):Nj+gc(4),0-gc(5):Nk+gc(6)))
+
+   call self%compute_gradient(grd=grd, var=momentum(0-gc(1):Ni+gc(2),0-gc(3):Nj+gc(4),0-gc(5):Nk+gc(6)), gv=G)
+   do k=0,Nk+1
+      do j=0,Nj+1
+         do i=0,Ni+1
+            vel(i,j,k)%x = G(1,1,i,j,k)
+            vel(i,j,k)%y = G(2,2,i,j,k)
+            vel(i,j,k)%z = G(3,3,i,j,k)
+         enddo
+      enddo
+   enddo
+   call self%compute_gradient(grd=grd, var=vel(0-gc(1):Ni+gc(2),0-gc(3):Nj+gc(4),0-gc(5):Nk+gc(6)), gv=G)
+   do k=0,Nk+1
+      do j=0,Nj+1
+         do i=0,Ni+1
+            delta = max(eps12,(volume(i,j,k)*volume(i,j,k))**1._R8P/3._R8P)/12._R8P
+            vel(i,j,k)%x = momentum(i,j,k)%x + delta * (G(1,1,i,j,k) + G(1,2,i,j,k) + G(1,3,i,j,k))
+            vel(i,j,k)%y = momentum(i,j,k)%y + delta * (G(2,1,i,j,k) + G(2,2,i,j,k) + G(2,3,i,j,k))
+            vel(i,j,k)%z = momentum(i,j,k)%z + delta * (G(3,1,i,j,k) + G(3,2,i,j,k) + G(3,3,i,j,k))
+         enddo
+      enddo
+   enddo
+   call self%compute_gradient(grd=grd, var=vel(0-gc(1):Ni+gc(2),0-gc(3):Nj+gc(4),0-gc(5):Nk+gc(6)), gv=G)
+   do k=0,Nk+1
+      do j=0,Nj+1
+         do i=0,Ni+1
+            delta = max(eps12,(volume(i,j,k)*volume(i,j,k))**1._R8P/3._R8P)/24._R8P
+            div = G(1,1,i,j,k) + G(2,2,i,j,k) + G(3,3,i,j,k)
+            kmod = delta * div * div
+            kres = 0.5_R8P * ((vel(i,j,k)%x - vel0_%x) * (vel(i,j,k)%x - vel0_%x) + &
+                              (vel(i,j,k)%y - vel0_%y) * (vel(i,j,k)%y - vel0_%y) + &
+                              (vel(i,j,k)%z - vel0_%z) * (vel(i,j,k)%z - vel0_%z))
+            k_ratio(i,j,k) = kmod / (kmod + kres)
+         enddo
+      enddo
+   enddo
+   endassociate
+   endsubroutine compute_kinetic_energy_ratio
 
    subroutine compute_loads(self, grd, icc, patch, RE, rFR2, zfs)
    !< Compute loads (forces and torques) on patches.
