@@ -46,14 +46,31 @@ contains
    self%is_loaded = .false.
    endsubroutine destroy
 
-   subroutine load_solution(self, file_unit, is_level_set, is_zeroeq, is_oneeq, is_twoeq)
+   subroutine load_solution(self,file_unit,is_cell_centered,patch,RE,rFR2,zfs,is_level_set,is_zeroeq,is_oneeq,is_twoeq, &
+                            compute_lambda2,compute_qfactor,compute_helicity,compute_vorticity,                         &
+                            compute_div2LT,compute_k_ratio,compute_yplus,compute_tau,compute_div_tau,compute_loads)
    !< Load subzone solution from file.
    class(block_esz_object), intent(inout)        :: self              !< Block data.
    integer(I4P),            intent(in)           :: file_unit         !< Logical file unit.
+   logical,                 intent(in), optional :: is_cell_centered  !< Define variables at cell centers or nodes.
+   integer(I4P),            intent(in), optional :: patch             !< Patch boundary conditions.
+   real(R8P),               intent(in), optional :: RE                !< Reynolds number.
+   real(R8P),               intent(in), optional :: rFR2              !< 1/(Froude number)^2.
+   real(R8P),               intent(in), optional :: zfs               !< Z quote of free surface.
    logical,                 intent(in), optional :: is_level_set      !< Flag for level set function presence.
    logical,                 intent(in), optional :: is_zeroeq         !< Use *zero* equations turbulence model.
    logical,                 intent(in), optional :: is_oneeq          !< Use *one* equations turbulence model.
    logical,                 intent(in), optional :: is_twoeq          !< Use *two* equations turbulence model.
+   logical,                 intent(in), optional :: compute_lambda2   !< Compute lamda2 field.
+   logical,                 intent(in), optional :: compute_qfactor   !< Compute qfactor field.
+   logical,                 intent(in), optional :: compute_helicity  !< Compute helicity field.
+   logical,                 intent(in), optional :: compute_vorticity !< Compute vorticity field.
+   logical,                 intent(in), optional :: compute_div2LT    !< Compute double divergence of Lighthill tensor.
+   logical,                 intent(in), optional :: compute_k_ratio   !< Compute kinetic energy ratio.
+   logical,                 intent(in), optional :: compute_yplus     !< Compute y+ field.
+   logical,                 intent(in), optional :: compute_tau       !< Compute tau field.
+   logical,                 intent(in), optional :: compute_div_tau   !< Compute divergence of tau field.
+   logical,                 intent(in), optional :: compute_loads     !< Compute loads (forces and torques).
    real(R8P), allocatable                        :: rcc_buf(:,:,:)    !< Buffer for reading rcc.
    integer(kind=I4P)                             :: i1,j1,k1,i2,j2,k2 !< Subzone extents.
    integer(I4P)                                  :: i,j,k             !< Counter.
@@ -91,9 +108,11 @@ contains
       call grd%compute_metrics
       grd%is_loaded = .true.
       ! load subzone solution
-      sol%Ni = Ni ; sol%Nj = Nj ; sol%Nk = Nk
-      sol%has_aux = .true.
-      call sol%alloc
+      call sol%init(Ni=Ni,Nj=Nj,Nk=Nk,                                                                     &
+                    is_level_set=is_level_set,is_zeroeq=is_zeroeq,is_oneeq=is_oneeq,is_twoeq=is_twoeq,     &
+                    has_lambda2=compute_lambda2,has_qfactor=compute_qfactor,has_helicity=compute_helicity, &
+                    has_vorticity=compute_vorticity,has_div2LT=compute_div2LT,has_k_ratio=compute_k_ratio, &
+                    has_yplus=compute_yplus,has_tau=compute_tau,has_div_tau=compute_div_tau,has_loads=compute_loads)
       read(file_unit)(((sol%momentum(i,j,k)%x,i=i1,i2),j=j1,j2),k=k1,k2)
       read(file_unit)(((sol%momentum(i,j,k)%y,i=i1,i2),j=j1,j2),k=k1,k2)
       read(file_unit)(((sol%momentum(i,j,k)%z,i=i1,i2),j=j1,j2),k=k1,k2)
@@ -110,7 +129,6 @@ contains
          read(file_unit)(((sol%turbulent_kinetic_energy(i,j,k),i=i1,i2),j=j1,j2),k=k1,k2)
          read(file_unit)(((sol%turbulent_kinetic_energy_dissipation(i,j,k),i=i1,i2),j=j1,j2),k=k1,k2)
       endif
-      call sol%compute_aux(grd=grd)
       sol%is_loaded = .true.
       ! load subzone icc rcc
       icc%Ni = Ni ; icc%Nj = Nj ; icc%Nk = Nk
@@ -119,6 +137,10 @@ contains
       read(file_unit)(((rcc_buf(i,j,k),i=i1,i2),j=j1,j2),k=k1,k2)
       icc%rcc = real(rcc_buf, kind=R4P)
       icc%is_loaded = .true.
+      call sol%compute_aux(grd=grd, icc=icc, patch=patch, RE=RE, rFR2=rFR2, zfs=zfs)
+      if (present(is_cell_centered)) then
+         if (.not.is_cell_centered) call sol%interpolate_at_nodes
+      endif
    endassociate
    self%is_loaded = .true.
    endsubroutine load_solution

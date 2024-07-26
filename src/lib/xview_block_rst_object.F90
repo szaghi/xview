@@ -18,10 +18,6 @@ type :: block_rst_object
    integer(I4P)              :: Nj=0                                        !< Number of cells in j direction.
    integer(I4P)              :: Nk=0                                        !< Number of cells in k direction.
    integer(I4P)              :: gc(6)=[2, 2, 2, 2, 2, 2]                    !< Number of ghost cells.
-   logical                   :: is_level_set=.false.                        !< Use Level Set model.
-   logical                   :: is_zeroeq=.false.                           !< Use *zero* equations turbulence model.
-   logical                   :: is_oneeq=.false.                            !< Use *one* equations turbulence model.
-   logical                   :: is_twoeq=.false.                            !< Use *two* equations turbulence model.
    type(vector), allocatable :: momentum(:,:,:)                             !< Momentum field.
    real(R8P),    allocatable :: pressure(:,:,:)                             !< Pressure field.
    real(R8P),    allocatable :: level_set(:,:,:)                            !< Level set field.
@@ -30,22 +26,35 @@ type :: block_rst_object
    real(R8P),    allocatable :: turbulent_viscosity(:,:,:)                  !< Turbulent viscosity field.
    real(R8P),    allocatable :: turbulent_kinetic_energy(:,:,:)             !< Turbulent kinetic energy field.
    real(R8P),    allocatable :: turbulent_kinetic_energy_dissipation(:,:,:) !< Turbulent kinetic energy dissipation field.
-   logical                   :: has_aux=.false.                             !< Compute auxiliary variables.
    real(R8P),    allocatable :: lambda2(:,:,:)                              !< Variable to identify vortices (lambda 2).
    real(R8P),    allocatable :: qfactor(:,:,:)                              !< Variable to identify vortices (q factor).
    real(R8P),    allocatable :: helicity(:,:,:)                             !< Helicity.
    type(vector), allocatable :: vorticity(:,:,:)                            !< Vorticity.
+   real(R8P),    allocatable :: div2LT(:,:,:)                               !< Double divergence of Lighthill tensor.
+   real(R8P),    allocatable :: k_ratio(:,:,:)                              !< Kinetic energies ratio.
    real(R8P),    allocatable :: yplus(:,:,:)                                !< Estimation of y+.
    type(vector), allocatable :: tau(:,:,:)                                  !< Tau wall.
    real(R8P),    allocatable :: div_tau(:,:,:)                              !< Divergence of Tau wall.
-   real(R8P),    allocatable :: div2LT(:,:,:)                               !< Double divergence of Lighthill tensor.
-   real(R8P),    allocatable :: k_ratio(:,:,:)                              !< Kinetic energies ratio.
    type(vector), allocatable :: force_hydrostatic(:,:,:)                    !< Hydrostic part of forces.
    type(vector), allocatable :: force_pressure(:,:,:)                       !< Pressure part of forces.
    type(vector), allocatable :: force_viscous(:,:,:)                        !< Viscous part of forces.
    type(vector), allocatable :: torque_hydrostatic(:,:,:)                   !< Hydrostic part of torques.
    type(vector), allocatable :: torque_pressure(:,:,:)                      !< Pressure part of torques.
    type(vector), allocatable :: torque_viscous(:,:,:)                       !< Viscous part of torques.
+   logical                   :: is_level_set=.false.                        !< Use Level Set model.
+   logical                   :: is_zeroeq=.false.                           !< Use *zero* equations turbulence model.
+   logical                   :: is_oneeq=.false.                            !< Use *one* equations turbulence model.
+   logical                   :: is_twoeq=.false.                            !< Use *two* equations turbulence model.
+   logical                   :: has_lambda2=.false.                         !< Solution has lamda2 field.
+   logical                   :: has_qfactor=.false.                         !< Solution has qfactor field.
+   logical                   :: has_helicity=.false.                        !< Solution has helicity field.
+   logical                   :: has_vorticity=.false.                       !< Solution has vorticity field.
+   logical                   :: has_div2LT=.false.                          !< Solution has double divergence of Lighthill tensor.
+   logical                   :: has_k_ratio=.false.                         !< Solution has kinetic energy ratio.
+   logical                   :: has_yplus=.false.                           !< Solution has y+ field.
+   logical                   :: has_tau=.false.                             !< Solution has tau field.
+   logical                   :: has_div_tau=.false.                         !< Solution has divergence of tau field.
+   logical                   :: has_loads=.false.                           !< Solution has loads (forces and torques).
    logical                   :: is_loaded=.false.                           !< Flag for checking if the block is loaded.
    contains
       ! public methods
@@ -53,11 +62,11 @@ type :: block_rst_object
       procedure, pass(self) :: alloc                        !< Allocate dynamic memory.
       procedure, pass(self) :: compute_aux                  !< Compute auxiliary varibles.
       procedure, pass(self) :: compute_div2LT               !< Compute double divergence of Lighthill tensor.
-      procedure, pass(self) :: compute_gradient             !< Return the (3D) gradient of a vector.
       procedure, pass(self) :: compute_kinetic_energy_ratio !< Compute ratio of kinetic energies.
       procedure, pass(self) :: compute_loads                !< Compute loads (forces and torques) on patches.
-      procedure, pass(self) :: compute_yplus                !< Compute yplus on patches.
       procedure, pass(self) :: compute_tau                  !< Compute Tau wall and its divergence on patches.
+      procedure, pass(self) :: compute_vorticity            !< Compute vorticity related varibles.
+      procedure, pass(self) :: compute_yplus                !< Compute yplus on patches.
       procedure, pass(self) :: has_level_set                !< Return true if block has level set functions.
       procedure, pass(self) :: has_turb_kinetic_energy      !< Return true if block has turbulent kinetic energy field.
       procedure, pass(self) :: has_turb_kinetic_energy_diss !< Return true if block has turb. k. energy dissipation field.
@@ -81,10 +90,6 @@ contains
    self%Nj = 0
    self%Nk = 0
    self%gc = 2
-   self%is_level_set = .false.
-   self%is_zeroeq = .false.
-   self%is_oneeq = .false.
-   self%is_twoeq = .false.
    if (allocated(self%momentum))                             deallocate(self%momentum)
    if (allocated(self%pressure))                             deallocate(self%pressure)
    if (allocated(self%level_set))                            deallocate(self%level_set)
@@ -93,22 +98,35 @@ contains
    if (allocated(self%turbulent_viscosity))                  deallocate(self%turbulent_viscosity)
    if (allocated(self%turbulent_kinetic_energy))             deallocate(self%turbulent_kinetic_energy)
    if (allocated(self%turbulent_kinetic_energy_dissipation)) deallocate(self%turbulent_kinetic_energy_dissipation)
-   self%has_aux = .false.
-   if (allocated(self%lambda2))            deallocate(self%lambda2)
-   if (allocated(self%div2LT))             deallocate(self%div2LT)
-   if (allocated(self%qfactor))            deallocate(self%qfactor)
-   if (allocated(self%helicity))           deallocate(self%helicity)
-   if (allocated(self%vorticity))          deallocate(self%vorticity)
-   if (allocated(self%k_ratio))            deallocate(self%k_ratio)
-   if (allocated(self%yplus))              deallocate(self%yplus)
-   if (allocated(self%tau))                deallocate(self%tau)
-   if (allocated(self%div_tau))            deallocate(self%div_tau)
-   if (allocated(self%force_hydrostatic))  deallocate(self%force_hydrostatic)
-   if (allocated(self%force_pressure))     deallocate(self%force_pressure)
-   if (allocated(self%force_viscous))      deallocate(self%force_viscous)
-   if (allocated(self%torque_hydrostatic)) deallocate(self%torque_hydrostatic)
-   if (allocated(self%torque_pressure))    deallocate(self%torque_pressure)
-   if (allocated(self%torque_viscous))     deallocate(self%torque_viscous)
+   if (allocated(self%lambda2))                              deallocate(self%lambda2)
+   if (allocated(self%qfactor))                              deallocate(self%qfactor)
+   if (allocated(self%helicity))                             deallocate(self%helicity)
+   if (allocated(self%vorticity))                            deallocate(self%vorticity)
+   if (allocated(self%div2LT))                               deallocate(self%div2LT)
+   if (allocated(self%k_ratio))                              deallocate(self%k_ratio)
+   if (allocated(self%yplus))                                deallocate(self%yplus)
+   if (allocated(self%tau))                                  deallocate(self%tau)
+   if (allocated(self%div_tau))                              deallocate(self%div_tau)
+   if (allocated(self%force_hydrostatic))                    deallocate(self%force_hydrostatic)
+   if (allocated(self%force_pressure))                       deallocate(self%force_pressure)
+   if (allocated(self%force_viscous))                        deallocate(self%force_viscous)
+   if (allocated(self%torque_hydrostatic))                   deallocate(self%torque_hydrostatic)
+   if (allocated(self%torque_pressure))                      deallocate(self%torque_pressure)
+   if (allocated(self%torque_viscous))                       deallocate(self%torque_viscous)
+   self%is_level_set=.false.
+   self%is_zeroeq=.false.
+   self%is_oneeq=.false.
+   self%is_twoeq=.false.
+   self%has_lambda2=.false.
+   self%has_qfactor=.false.
+   self%has_helicity=.false.
+   self%has_vorticity=.false.
+   self%has_yplus=.false.
+   self%has_tau=.false.
+   self%has_div_tau=.false.
+   self%has_div2LT=.false.
+   self%has_k_ratio=.false.
+   self%has_loads=.false.
    self%is_loaded = .false.
    endsubroutine destroy
 
@@ -131,100 +149,45 @@ contains
       allocate(self%turbulent_kinetic_energy(1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
       allocate(self%turbulent_kinetic_energy_dissipation(1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
    endif
-   if (self%has_aux) then
-      allocate(self%lambda2(           1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6))) ; self%lambda2            = 0._R8P
-      allocate(self%div2LT(            1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6))) ; self%div2LT             = 0._R8P
-      allocate(self%qfactor(           1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6))) ; self%qfactor            = 0._R8P
-      allocate(self%helicity(          1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6))) ; self%helicity           = 0._R8P
-      allocate(self%vorticity(         1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6))) ; self%vorticity          = 0._R8P
-      allocate(self%k_ratio(           1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6))) ; self%k_ratio            = 0._R8P
-      allocate(self%yplus(             0-gc(1):Ni+gc(2), 0-gc(3):Nj+gc(4), 0-gc(5):Nk+gc(6))) ; self%yplus              = 0._R8P
-      allocate(self%tau(               0-gc(1):Ni+gc(2), 0-gc(3):Nj+gc(4), 0-gc(5):Nk+gc(6))) ; self%tau                = 0._R8P
-      allocate(self%div_tau(           0-gc(1):Ni+gc(2), 0-gc(3):Nj+gc(4), 0-gc(5):Nk+gc(6))) ; self%div_tau            = 0._R8P
-      allocate(self%force_hydrostatic( 0-gc(1):Ni+gc(2), 0-gc(3):Nj+gc(4), 0-gc(5):Nk+gc(6))) ; self%force_hydrostatic  = 0._R8P
-      allocate(self%force_pressure(    0-gc(1):Ni+gc(2), 0-gc(3):Nj+gc(4), 0-gc(5):Nk+gc(6))) ; self%force_pressure     = 0._R8P
-      allocate(self%force_viscous(     0-gc(1):Ni+gc(2), 0-gc(3):Nj+gc(4), 0-gc(5):Nk+gc(6))) ; self%force_viscous      = 0._R8P
-      allocate(self%torque_hydrostatic(0-gc(1):Ni+gc(2), 0-gc(3):Nj+gc(4), 0-gc(5):Nk+gc(6))) ; self%torque_hydrostatic = 0._R8P
-      allocate(self%torque_pressure(   0-gc(1):Ni+gc(2), 0-gc(3):Nj+gc(4), 0-gc(5):Nk+gc(6))) ; self%torque_pressure    = 0._R8P
-      allocate(self%torque_viscous(    0-gc(1):Ni+gc(2), 0-gc(3):Nj+gc(4), 0-gc(5):Nk+gc(6))) ; self%torque_viscous     = 0._R8P
+   ! auxiliary variables
+   if (self%has_lambda2  ) allocate(self%lambda2(  1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
+   if (self%has_qfactor  ) allocate(self%qfactor(  1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
+   if (self%has_helicity ) allocate(self%helicity( 1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
+   if (self%has_vorticity) allocate(self%vorticity(1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
+   if (self%has_div2LT   ) allocate(self%div2LT(   1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
+   if (self%has_k_ratio  ) allocate(self%k_ratio(  1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
+   if (self%has_yplus    ) allocate(self%yplus(    0-gc(1):Ni+gc(2), 0-gc(3):Nj+gc(4), 0-gc(5):Nk+gc(6)))
+   if (self%has_tau      ) allocate(self%tau(      0-gc(1):Ni+gc(2), 0-gc(3):Nj+gc(4), 0-gc(5):Nk+gc(6)))
+   if (self%has_div_tau  ) allocate(self%div_tau(  0-gc(1):Ni+gc(2), 0-gc(3):Nj+gc(4), 0-gc(5):Nk+gc(6)))
+   if (self%has_loads) then
+      allocate(self%force_hydrostatic( 0-gc(1):Ni+gc(2), 0-gc(3):Nj+gc(4), 0-gc(5):Nk+gc(6)))
+      allocate(self%force_pressure(    0-gc(1):Ni+gc(2), 0-gc(3):Nj+gc(4), 0-gc(5):Nk+gc(6)))
+      allocate(self%force_viscous(     0-gc(1):Ni+gc(2), 0-gc(3):Nj+gc(4), 0-gc(5):Nk+gc(6)))
+      allocate(self%torque_hydrostatic(0-gc(1):Ni+gc(2), 0-gc(3):Nj+gc(4), 0-gc(5):Nk+gc(6)))
+      allocate(self%torque_pressure(   0-gc(1):Ni+gc(2), 0-gc(3):Nj+gc(4), 0-gc(5):Nk+gc(6)))
+      allocate(self%torque_viscous(    0-gc(1):Ni+gc(2), 0-gc(3):Nj+gc(4), 0-gc(5):Nk+gc(6)))
    endif
    endassociate
    endsubroutine alloc
 
-   subroutine compute_aux(self, grd)
+   subroutine compute_aux(self, grd, icc, patch, RE, rFR2, zfs)
    !< Compute auxiliary varibles.
-   class(block_rst_object), intent(inout) :: self                          !< Block data.
-   type(block_grd_object),  intent(in)    :: grd                           !< Block grd data.
-   real(R8P), allocatable                 :: G(:,:,:,:,:)                  !< Gradient.
-   real(R8P)                              :: c(0:2),emin,emax,eval,fval,mu !< Dummy reals.
-   type(vector)                           :: um                            !< Dummy vector.
-   real(R8P), dimension(3,3)              :: IDEN,SO,S,O                   !< Matrices.
-   integer(I4P)                           :: i,j,k,ii,jj,kk,iter           !< Counter.
-   real(R8P), parameter                   :: EPS6=1d-6, EPS9=1d-9          !< Tolerances.
+   class(block_rst_object), intent(inout)        :: self  !< Block data.
+   type(block_grd_object),  intent(in)           :: grd   !< Block grd data.
+   type(block_icc_object),  intent(in)           :: icc   !< Block icc data.
+   integer(I4P),            intent(in), optional :: patch !< Patch boundary conditions.
+   real(R8P),               intent(in), optional :: RE    !< Reynolds number.
+   real(R8P),               intent(in), optional :: rFR2  !< 1/(Froude number)^2.
+   real(R8P),               intent(in), optional :: zfs   !< Z quote of free surface.
 
-   associate(Ni=>self%Ni, Nj=>self%Nj, Nk=>self%Nk, gc=>self%gc,                  &
-             NFiS=>grd%NFiS, NFjS=>grd%NFjS, NFkS=>grd%NFkS, volume=>grd%volume,  &
-             momentum=>self%momentum,lambda2=>self%lambda2,qfactor=>self%qfactor, &
-             helicity=>self%helicity,vorticity=>self%vorticity)
-   allocate(G(1:3,1:3,0-gc(1):Ni+gc(2),0-gc(3):Nj+gc(4),0-gc(5):Nk+gc(6)))
-
-   IDEN = 0._R8P
-   do i=1, 3
-      IDEN(i,i) = 1._R8P
-   enddo
-   call self%compute_gradient(grd=grd, var=momentum, gv=G, tensor=.true.)
-
-   do k=0,Nk+1
-      do j=0,Nj+1
-         do i=0,Ni+1
-            ! compute vorticity vector
-            um%x =  (G(3,2,i,j,k) - G(2,3,i,j,k))
-            um%y = -(G(1,3,i,j,k) - G(3,1,i,j,k)) ! control signs!!!!
-            um%z =  (G(2,1,i,j,k) - G(1,2,i,j,k))
-
-            ! tensor S^2 + O^2 (saved in G)
-            S = 0._R8P
-            O = 0._R8P
-            do kk=1,3
-               do jj=1,3
-                  S(jj,kk) = 0.5_R8P*(G(jj,kk,i,j,k)+G(kk,jj,i,j,k))
-                  O(jj,kk) = 0.5_R8P*(G(jj,kk,i,j,k)-G(kk,jj,i,j,k))
-               enddo
-            enddo
-            SO = matmul(S,S) + matmul(O,O)
-
-            ! coefficients of characterist polynomial: lamda^3 + c(2)*lamda^2 + c(1)*lamda + c(0) = 0
-            c(2) = -(SO(1,1) + SO(2,2) + SO(3,3))
-            c(1) = SO(1,1)*SO(2,2) + SO(1,1)*SO(3,3) + SO(2,2)*SO(3,3) - SO(2,3)**2 - SO(1,3)**2 - SO(1,2)**2
-            c(0) = SO(1,1)*SO(2,3)**2 + SO(2,2)*SO(1,3)**2 + SO(3,3)*SO(1,2)**2 - 2._R8P*SO(2,3)*SO(1,3)*SO(1,2) &
-                   - SO(1,1)*SO(2,2)*SO(3,3)
-
-            ! compute second eigenvalue of characteristic polynomial
-            mu = sqrt(c(2)**2 - 3._R8P*c(1))
-            emin = (-c(2)-mu)/3._R8P
-            emax = (-c(2)+mu)/3._R8P
-            do iter=1,100
-               eval = 0.5_R8P*(emin+emax)
-               fval = eval**3 + c(2)*eval**2 + c(1)*eval + c(0)
-               if (fval<0._R8P) then
-                  emax = eval
-               else
-                  emin = eval
-               end if
-               if (abs(fval)<eps9 .and.((emax-emin)/eval)<eps6) exit
-            end do
-
-            lambda2(  i,j,k) = eval
-            qfactor(  i,j,k) = 0.5_R8P*(dot_product(O(1,:),O(1,:)) + dot_product(O(2,:),O(2,:)) + dot_product(O(3,:),O(3,:)) - &
-                                       (dot_product(S(1,:),S(1,:)) + dot_product(S(2,:),S(2,:)) + dot_product(S(3,:),S(3,:))))
-            helicity( i,j,k) = momentum(i,j,k).dot.um / (max(eps6*eps6,normL2(momentum(i,j,k))*normL2(um)))
-            vorticity(i,j,k) = um
-         enddo
-      enddo
-   enddo
-   endassociate
-   call self%compute_div2LT(grd=grd)
-   call self%compute_kinetic_energy_ratio(grd=grd)
+   if ((self%has_lambda2).or.(self%has_qfactor).or.(self%has_helicity).or.(self%has_vorticity)) call self%compute_vorticity(grd)
+   if (self%has_div2LT) call self%compute_div2LT(grd)
+   if (self%has_k_ratio) call self%compute_kinetic_energy_ratio(grd)
+   if (present(patch)) then
+      if (self%has_yplus)                   call self%compute_yplus(grd=grd, icc=icc, patch=patch, RE=RE)
+      if (self%has_tau.or.self%has_div_tau) call self%compute_tau(  grd=grd, icc=icc, patch=patch, RE=RE)
+      if (self%has_loads)                   call self%compute_loads(grd=grd, icc=icc, patch=patch, RE=RE, rFR2=rFR2, zfs=zfs)
+   endif
    endsubroutine compute_aux
 
    subroutine compute_div2LT(self, grd)
@@ -241,7 +204,7 @@ contains
    allocate(G(1:3,1:3,0-gc(1):Ni+gc(2),0-gc(3):Nj+gc(4),0-gc(5):Nk+gc(6)))
    allocate(divLT(    1-gc(1):Ni+gc(2),1-gc(3):Nj+gc(4),1-gc(5):Nk+gc(6)))
 
-   call self%compute_gradient(grd=grd, var=momentum, gv=G, tensor=.true.)
+   call grd%compute_gradient(var=momentum, gv=G, tensor=.true.)
    do k=0,Nk+1
       do j=0,Nj+1
          do i=0,Ni+1
@@ -251,7 +214,7 @@ contains
          enddo
       enddo
    enddo
-   call self%compute_gradient(grd=grd, var=divLT, gv=G)
+   call grd%compute_gradient(var=divLT, gv=G)
    do k=0,Nk+1
       do j=0,Nj+1
          do i=0,Ni+1
@@ -262,97 +225,15 @@ contains
    endassociate
    endsubroutine compute_div2LT
 
-   subroutine compute_gradient(self, grd, var, gv, tensor)
-   !< Return the (3D) gradient (by finite volume approach) of a vector (or diadic-tensor-like) in a block.
-   class(block_rst_object),   intent(inout)        :: self               !< Block data.
-   type(block_grd_object),    intent(in)           :: grd                !< Block grd data.
-   type(vector),              intent(inout)        :: var(1-self%gc(1):, &
-                                                          1-self%gc(3):, &
-                                                          1-self%gc(5):) !< Input vector.
-   real(R8P), allocatable,    intent(out)          :: gv(:,:,:,:,:)      !< Gradient.
-   logical,                   intent(in), optional :: tensor             !< Input variable is a diadic-tensor-like.
-   real(R8P), allocatable                          :: Fi(:,:,:,:,:)      !< Fluxes i direction.
-   real(R8P), allocatable                          :: Fj(:,:,:,:,:)      !< Fluxes j direction.
-   real(R8P), allocatable                          :: Fk(:,:,:,:,:)      !< Fluxes k direction.
-   type(vector)                                    :: vm                 !< Dummy vector variables.
-   integer(I4P)                                    :: i,j,k              !< Counter.
-
-   associate(Ni=>self%Ni, Nj=>self%Nj, Nk=>self%Nk, gc=>self%gc, &
-             NFiS=>grd%NFiS, NFjS=>grd%NFjS, NFkS=>grd%NFkS, volume=>grd%volume)
-   allocate(Fi(1:3,1:3,0-gc(1):Ni+gc(2),0-gc(3):Nj+gc(4),0-gc(5):Nk+gc(6)))
-   allocate(Fj(1:3,1:3,0-gc(1):Ni+gc(2),0-gc(3):Nj+gc(4),0-gc(5):Nk+gc(6)))
-   allocate(Fk(1:3,1:3,0-gc(1):Ni+gc(2),0-gc(3):Nj+gc(4),0-gc(5):Nk+gc(6)))
-   allocate(gv(1:3,1:3,0-gc(1):Ni+gc(2),0-gc(3):Nj+gc(4),0-gc(5):Nk+gc(6)))
-   Fi = 0._R8P
-   Fj = 0._R8P
-   Fk = 0._R8P
-   ! extrapolate var from inner cells to ghost cells
-   do k=1,Nk
-      do j=1,Nj
-         var(1- gc(1),j,k) = 2._R8P*var(0,   j,k)-var(1, j,k)
-         var(Ni+gc(2),j,k) = 2._R8P*var(Ni+1,j,k)-var(Ni,j,k)
-      enddo
-   enddo
-   do k=1,Nk
-      do i=0,Ni+1
-         var(i,1- gc(3),k) = 2._R8P*var(i,0,   k)-var(i,1, k)
-         var(i,Nj+gc(4),k) = 2._R8P*var(i,Nj+1,k)-var(i,Nj,k)
-      enddo
-   enddo
-   do j=0,Nj+1
-      do i=0,Ni+1
-         var(i,j,1- gc(5)) = 2._R8P*var(i,j,0   )-var(i,j,1 )
-         var(i,j,Nk+gc(6)) = 2._R8P*var(i,j,Nk+1)-var(i,j,Nk)
-      enddo
-   enddo
-   ! compute fluxes
-   do k=0,Nk+1
-      do j=0,Nj+1
-         do i=-1,Ni+1
-            vm = 0.5_R8P*(var(i,j,k)+var(i+1,j,k))
-            Fi(:,:,i,j,k) = fluxes(NFS=NFiS(i,j,k), var=vm, tensor=tensor)
-         enddo
-      enddo
-   enddo
-   do k=0,Nk+1
-      do j=-1,Nj+1
-         do i=0,Ni+1
-            vm = 0.5_R8P*(var(i,j,k)+var(i,j+1,k))
-            Fj(:,:,i,j,k) = fluxes(NFS=NFjS(i,j,k), var=vm, tensor=tensor)
-         enddo
-      enddo
-   enddo
-   do k=-1,Nk+1
-      do j=0,Nj+1
-         do i=0,Ni+1
-            vm = 0.5_R8P*(var(i,j,k)+var(i,j,k+1))
-            Fk(:,:,i,j,k) = fluxes(NFS=NFkS(i,j,k), var=vm, tensor=tensor)
-         enddo
-      enddo
-   enddo
-   do k=0,Nk+1
-      do j=0,Nj+1
-         do i=0,Ni+1
-            ! compute gradient
-            gv(:,:,i,j,k) = gradient_cell(Fi=Fi(:,:,i-1:i,j-1:j,k-1:k), &
-                                          Fj=Fj(:,:,i-1:i,j-1:j,k-1:k), &
-                                          Fk=Fk(:,:,i-1:i,j-1:j,k-1:k), &
-                                          volume=volume(i,j,k))
-         enddo
-      enddo
-   enddo
-   endassociate
-   endsubroutine compute_gradient
-
    subroutine compute_kinetic_energy_ratio(self, grd, vel0)
    !< Compute ratio of modelled kinetic energy over total kinetic energy.
    class(block_rst_object), intent(inout)        :: self         !< Block data.
    type(block_grd_object),  intent(in)           :: grd          !< Block grd data.
    type(vector),            intent(in), optional :: vel0         !< Undisturbed velocity.
    type(vector)                                  :: vel0_        !< Undisturbed velocity, local var.
-   real(R8P), allocatable                        :: G(:,:,:,:,:) !< Gradient.
-   type(vector), allocatable                     :: vel(:,:,:)   !< Taylor expansion of velocity.
-   real(R8P)                                     :: div          !< Divergence of velocity.
+   real(R8P), allocatable                        :: l(:,:,:,:,:) !< Laplacian tensor of velocity.
+   type(vector), allocatable                     :: vf(:,:,:)    !< Taylor expansion of filtered velocity.
+   real(R8P), allocatable                        :: div(:,:,:)   !< Divergence of filtered velocity.
    real(R8P)                                     :: kmod         !< Modelled kinetic energy.
    real(R8P)                                     :: kres         !< Resolved kinetic energy.
    integer(I4P)                                  :: i,j,k        !< Counter.
@@ -360,43 +241,32 @@ contains
    real(R8P), parameter                          :: EPS12=1d-12  !< Tolerances.
 
    vel0_ = 0._R8P ; if (present(vel0)) vel0_ = vel0
-   associate(Ni=>self%Ni, Nj=>self%Nj, Nk=>self%Nk, gc=>self%gc,                 &
-             NFiS=>grd%NFiS, NFjS=>grd%NFjS, NFkS=>grd%NFkS, volume=>grd%volume, &
+   associate(Ni=>grd%Ni, Nj=>grd%Nj, Nk=>grd%Nk, gc=>grd%gc, volume=>grd%volume, &
              momentum=>self%momentum,k_ratio=>self%k_ratio)
-   allocate(G(1:3,1:3,0-gc(1):Ni+gc(2),0-gc(3):Nj+gc(4),0-gc(5):Nk+gc(6)))
-   allocate(vel(      1-gc(1):Ni+gc(2),1-gc(3):Nj+gc(4),1-gc(5):Nk+gc(6)))
-
-   call self%compute_gradient(grd=grd, var=momentum, gv=G)
+   allocate(vf(1-gc(1):Ni+gc(2),1-gc(3):Nj+gc(4),1-gc(5):Nk+gc(6)))
+   call grd%compute_laplacian_tensor(var=momentum, lv=l)
+   ! compute Taylor expansion of filtered velocity
    do k=0,Nk+1
       do j=0,Nj+1
          do i=0,Ni+1
-            vel(i,j,k)%x = G(1,1,i,j,k)
-            vel(i,j,k)%y = G(2,2,i,j,k)
-            vel(i,j,k)%z = G(3,3,i,j,k)
+            delta = max(EPS12, volume(i,j,k)**4._R8P/3._R8P)/12._R8P
+            vf(i,j,k)%x = momentum(i,j,k)%x + delta * (l(1,1,i,j,k) + l(1,2,i,j,k) + l(1,3,i,j,k)) ! d2u/dx2 + d2u/dy2 + d2u/dz2
+            vf(i,j,k)%y = momentum(i,j,k)%y + delta * (l(2,1,i,j,k) + l(2,2,i,j,k) + l(2,3,i,j,k)) ! d2v/dx2 + d2v/dy2 + d2v/dz2
+            vf(i,j,k)%z = momentum(i,j,k)%z + delta * (l(3,1,i,j,k) + l(3,2,i,j,k) + l(3,3,i,j,k)) ! d2w/dx2 + d2w/dy2 + d2w/dz2
          enddo
       enddo
    enddo
-   call self%compute_gradient(grd=grd, var=vel, gv=G)
+   call grd%compute_divergence(var=vf, div=div)
+   ! compute kinetic energy ratio
    do k=0,Nk+1
       do j=0,Nj+1
          do i=0,Ni+1
-            delta = max(eps12,(volume(i,j,k)*volume(i,j,k))**1._R8P/3._R8P)/12._R8P
-            vel(i,j,k)%x = momentum(i,j,k)%x + delta * (G(1,1,i,j,k) + G(1,2,i,j,k) + G(1,3,i,j,k))
-            vel(i,j,k)%y = momentum(i,j,k)%y + delta * (G(2,1,i,j,k) + G(2,2,i,j,k) + G(2,3,i,j,k))
-            vel(i,j,k)%z = momentum(i,j,k)%z + delta * (G(3,1,i,j,k) + G(3,2,i,j,k) + G(3,3,i,j,k))
-         enddo
-      enddo
-   enddo
-   call self%compute_gradient(grd=grd, var=vel, gv=G)
-   do k=0,Nk+1
-      do j=0,Nj+1
-         do i=0,Ni+1
-            delta = max(eps12,(volume(i,j,k)*volume(i,j,k))**1._R8P/3._R8P)/24._R8P
-            div = G(1,1,i,j,k) + G(2,2,i,j,k) + G(3,3,i,j,k)
-            kmod = delta * div * div
-            kres = 0.5_R8P * ((vel(i,j,k)%x - vel0_%x) * (vel(i,j,k)%x - vel0_%x) + &
-                              (vel(i,j,k)%y - vel0_%y) * (vel(i,j,k)%y - vel0_%y) + &
-                              (vel(i,j,k)%z - vel0_%z) * (vel(i,j,k)%z - vel0_%z))
+            delta = max(EPS12, volume(i,j,k)**4._R8P/3._R8P)/24._R8P
+            kmod = delta * div(i,j,k) * div(i,j,k)
+            kmod = div(i,j,k) * div(i,j,k)
+            kres = 0.5_R8P * ((vf(i,j,k)%x - vel0_%x) * (vf(i,j,k)%x - vel0_%x) + &
+                              (vf(i,j,k)%y - vel0_%y) * (vf(i,j,k)%y - vel0_%y) + &
+                              (vf(i,j,k)%z - vel0_%z) * (vf(i,j,k)%z - vel0_%z))
             k_ratio(i,j,k) = kmod / (kmod + kres)
          enddo
       enddo
@@ -527,121 +397,6 @@ contains
       endassociate
    enddo
    endsubroutine compute_loads
-
-   subroutine compute_yplus(self, grd, icc, patch, RE)
-   !< Compute yplus on patches.
-   class(block_rst_object), intent(inout) :: self    !< Block data.
-   type(block_grd_object),  intent(in)    :: grd     !< Block grd data.
-   type(block_icc_object),  intent(in)    :: icc     !< Block icc data.
-   integer(I4P),            intent(in)    :: patch   !< Patch bc to be found.
-   real(R8P),               intent(in)    :: RE      !< Reynolds number.
-   type(vector)                           :: NdS     !< Normal "tilde" for viscous part of forces (or distance for y+).
-   integer(I4P)                           :: i,j,k,p !< Counter.
-   real(R8P)                              :: twall   !< Shear stress.
-   real(R8P)                              :: utau    !< Friction velocity.
-   real(R8P)                              :: ds      !< Face area.
-   integer(I4P)                           :: i1,i2   !< Counter.
-   integer(I4P)                           :: j1,j2   !< Counter.
-   integer(I4P)                           :: k1,k2   !< Counter.
-
-   if (.not.allocated(grd%patches_extents)) return
-   do p=1, size(grd%patches_extents, dim=1)
-      associate(face=>grd%patches_extents(p,0),                                   &
-                ci1=>grd%patches_extents(p,1 ), ci2=>grd%patches_extents(p,2 ),   &
-                cj1=>grd%patches_extents(p,3 ), cj2=>grd%patches_extents(p,4 ),   &
-                ck1=>grd%patches_extents(p,5 ), ck2=>grd%patches_extents(p,6 ),   &
-                ni1=>grd%patches_extents(p,7 ), ni2=>grd%patches_extents(p,8 ),   &
-                nj1=>grd%patches_extents(p,9 ), nj2=>grd%patches_extents(p,10),   &
-                nk1=>grd%patches_extents(p,11), nk2=>grd%patches_extents(p,12),   &
-                nodes=>grd%nodes, NFiS=>grd%NFiS, NFjS=>grd%NFjS, NFkS=>grd%NFkS, &
-                iicc=>icc%icc,ticc=>icc%tcc,                                      &
-                is_level_set=>self%is_level_set,                                  &
-                momentum=>self%momentum, f0=>self%level_set_zero, yplus=>self%yplus)
-      select case(face)
-      case(1,2)
-         !$omp parallel default(none) &
-         !$omp private(i,j,k,NdS)     &
-         !$omp shared(ni1,ni2,nj1,nj2,nk1,nk2,ci1,ci2,cj1,cj2,ck1,ck2,face,patch,nodes,NFiS,iicc,ticc,momentum,f0,RE,yplus)
-         !$omp do
-         i1=ni1; i2=i1+1
-         if (face==2) i2=i1-1
-         do k=ck1,ck2
-            do j=cj1,cj2
-               ! checking if this is an active cell
-               if (ticc(ni1-1+face,j,k)/=patch) cycle
-               if (iicc(ci1,j,k)/=0) cycle
-               if (is_level_set) then
-                  if (f0(ni1-1+face,j,k)>0._R8P) cycle
-               endif
-
-               ! distance from the patch
-               NdS = 0.25_R8P*(nodes(i1,j,k)+nodes(i1,j-1,k)+nodes(i1,j,k-1)+nodes(i1,j-1,k-1)) - &
-                     0.25_R8P*(nodes(i2,j,k)+nodes(i2,j-1,k)+nodes(i2,j,k-1)+nodes(i2,j-1,k-1))
-               NdS = 0.5_R8P*NdS
-               ds = sqrt( normL2(NFiS(ni1,j,k)) )
-               twall = normL2((momentum(ci1-1+face,j,k)-momentum(ci1-2+face,j,k)).ortho.NFiS(ni1,j,k))/abs(Nds.dot.NFiS(ni1,j,k))/RE
-               utau  = sqrt(twall)
-               yplus(ci1,j,k) = RE*utau*( abs(Nds.dot.NFiS(ni1,j,k)/ds) )
-            enddo
-         enddo
-      case(3,4)
-         !$omp parallel default(none) &
-         !$omp private(i,j,k,NdS)     &
-         !$omp shared(ni1,ni2,nj1,nj2,nk1,nk2,ci1,ci2,cj1,cj2,ck1,ck2,face,patch,nodes,NFjS,iicc,ticc,momentum,f0,RE,yplus)
-         !$omp do
-         j1=nj1; j2=j1+1
-         if (face==4) j2=j1-1
-         do k=ck1,ck2
-            do i=ci1,ci2
-               ! checking if this is an active cell
-               if (ticc(i,nj1-1+(face-2),k)/=patch) cycle
-               if (iicc(i,cj1,k)/=0) cycle
-               if (is_level_set) then
-                  if (f0(i,nj1-1+(face-2),k)>0._R8P) cycle
-               endif
-
-               ! distance from the patch
-               NdS = 0.25_R8P*(nodes(i,j1,k)+nodes(i-1,j1,k)+nodes(i,j1,k-1)+nodes(i-1,j1,k-1)) - &
-                     0.25_R8P*(nodes(i,j2,k)+nodes(i-1,j2,k)+nodes(i,j2,k-1)+nodes(i-1,j2,k-1))
-               NdS = 0.5_R8P*NdS
-               ds = sqrt( normL2(NFjS(i,nj1,k)) )
-               twall = normL2((momentum(i,cj1-1+(face-2),k) - momentum(i,cj1-2+(face-2),k)).ortho.NFjS(i,nj1,k))/ &
-                                   abs(Nds.dot.NFjS(i,nj1,k))/RE
-               utau  = sqrt(twall)
-               yplus(i,cj1,k) = RE*utau*( abs(Nds.dot.NFjS(i,nj1,k)/ds) )
-            enddo
-         enddo
-      case(5,6)
-         !$omp parallel default(none) &
-         !$omp private(i,j,k,NdS)     &
-         !$omp shared(ni1,ni2,nj1,nj2,nk1,nk2,ci1,ci2,cj1,cj2,ck1,ck2,face,patch,nodes,NFkS,iicc,ticc,momentum,f0,RE,yplus)
-         !$omp do
-         k1=nk1; k2=k1+1
-         if (face==6) k2=k1-1
-         do j=cj1,cj2
-            do i=ci1,ci2
-               ! checking if this is an active cell
-               if (ticc(i,j,nk1-1+(face-4))/=patch) cycle
-               if (iicc(i,j,ck1)/=0) cycle
-               if (is_level_set) then
-                   if (f0(i,j,nk1-1+(face-4))>0._R8P) cycle
-               endif
-
-               ! distance from the patch
-               NdS = 0.25_R8P*(nodes(i,j,k1)+nodes(i-1,j,k1)+nodes(i,j-1,k1)+nodes(i-1,j-1,k1)) - &
-                     0.25_R8P*(nodes(i,j,k2)+nodes(i-1,j,k2)+nodes(i,j-1,k2)+nodes(i-1,j-1,k2))
-               NdS = 0.5_R8P*NdS
-               ds = sqrt( normL2(NFkS(i,j,nk1)) )
-               twall = normL2((momentum(i,j,ck1-1+(face-4)) - momentum(i,j,ck1-2+(face-4))).ortho.NFkS(i,j,nk1))/ &
-                               abs(Nds.dot.NFkS(i,j,nk1))/RE
-               utau  = sqrt(twall)
-               yplus(i,j,ck1) = RE*utau*( abs(Nds.dot.NFkS(i,j,nk1)/ds) )
-            enddo
-         enddo
-      endselect
-      endassociate
-   enddo
-   endsubroutine compute_yplus
 
    subroutine compute_tau(self, grd, icc, patch, RE)
    !< Compute tau wall and its divergence.
@@ -830,6 +585,208 @@ contains
    enddo
    endsubroutine compute_tau
 
+   subroutine compute_vorticity(self, grd)
+   !< Compute vorticity related varibles.
+   class(block_rst_object), intent(inout) :: self                              !< Block data.
+   type(block_grd_object),  intent(in)    :: grd                               !< Block grd data.
+   real(R8P), allocatable                 :: gv(:,:,:,:,:)                     !< Gradient of velocity.
+   real(R8P)                              :: c(0:2),emin,emax,eval,fval,mu     !< Dummy reals.
+   type(vector)                           :: um                                !< Dummy vector.
+   real(R8P), dimension(3,3)              :: SO,S,O                            !< Matrices.
+   integer(I4P)                           :: i,j,k,ii,jj,kk,iter               !< Counter.
+   real(R8P), parameter                   :: EPS6=1d-6, EPS9=1d-9, EPS12=1d-12 !< Tolerances.
+
+   associate(Ni=>grd%Ni,Nj=>grd%Nj,Nk=>grd%Nk,gc=>grd%gc, &
+             momentum=>self%momentum,lambda2=>self%lambda2,qfactor=>self%qfactor,helicity=>self%helicity,vorticity=>self%vorticity)
+   call grd%compute_gradient(var=momentum, gv=gv)
+   if (self%has_helicity.or.self%has_vorticity) then
+      ! compute vorticity vector
+      do k=0,Nk+1
+         do j=0,Nj+1
+            do i=0,Ni+1
+               vorticity%x =  (gv(3,2,i,j,k) - gv(2,3,i,j,k))
+               vorticity%y = -(gv(1,3,i,j,k) - gv(3,1,i,j,k))
+               vorticity%z =  (gv(2,1,i,j,k) - gv(1,2,i,j,k))
+            enddo
+         enddo
+      enddo
+   endif
+   if (self%has_helicity) then
+      ! compute helicity
+      do k=0,Nk+1
+         do j=0,Nj+1
+            do i=0,Ni+1
+               helicity(i,j,k) = momentum(i,j,k).dot.vorticity(i,j,k)/(max(EPS12,normL2(momentum(i,j,k))*normL2(vorticity(i,j,k))))
+            enddo
+         enddo
+      enddo
+   endif
+   if (self%has_lambda2.or.self%has_qfactor) then
+      do k=0,Nk+1
+         do j=0,Nj+1
+            do i=0,Ni+1
+               ! tensor S^2 + O^2
+               S = 0._R8P
+               O = 0._R8P
+               do kk=1,3
+                  do jj=1,3
+                     S(jj,kk) = 0.5_R8P*(gv(jj,kk,i,j,k)+gv(kk,jj,i,j,k))
+                     O(jj,kk) = 0.5_R8P*(gv(jj,kk,i,j,k)-gv(kk,jj,i,j,k))
+                  enddo
+               enddo
+               SO = matmul(S,S) + matmul(O,O)
+
+               if (self%has_qfactor) qfactor(i,j,k) = 0.5_R8P*(dot_product(O(1,:),O(1,:)) + &
+                                                               dot_product(O(2,:),O(2,:)) + &
+                                                               dot_product(O(3,:),O(3,:)) - &
+                                                              (dot_product(S(1,:),S(1,:)) + &
+                                                               dot_product(S(2,:),S(2,:)) + &
+                                                               dot_product(S(3,:),S(3,:))))
+
+               if (self%has_lambda2) then
+                  ! coefficients of characterist polynomial: lamda^3 + c(2)*lamda^2 + c(1)*lamda + c(0) = 0
+                  c(2) = -(SO(1,1) + SO(2,2) + SO(3,3))
+                  c(1) = SO(1,1)*SO(2,2) + SO(1,1)*SO(3,3) + SO(2,2)*SO(3,3) - SO(2,3)**2 - SO(1,3)**2 - SO(1,2)**2
+                  c(0) = SO(1,1)*SO(2,3)**2 + SO(2,2)*SO(1,3)**2 + SO(3,3)*SO(1,2)**2 - 2._R8P*SO(2,3)*SO(1,3)*SO(1,2) &
+                       - SO(1,1)*SO(2,2)*SO(3,3)
+                  ! compute second eigenvalue of characteristic polynomial
+                  mu = sqrt(c(2)**2 - 3._R8P*c(1))
+                  emin = (-c(2)-mu)/3._R8P
+                  emax = (-c(2)+mu)/3._R8P
+                  do iter=1,100
+                     eval = 0.5_R8P*(emin+emax)
+                     fval = eval**3 + c(2)*eval**2 + c(1)*eval + c(0)
+                     if (fval<0._R8P) then
+                        emax = eval
+                     else
+                        emin = eval
+                     end if
+                     if (abs(fval)<eps9 .and.((emax-emin)/eval)<eps6) exit
+                  end do
+                  lambda2(i,j,k) = eval
+               endif
+            enddo
+         enddo
+      enddo
+   endif
+   endassociate
+   endsubroutine compute_vorticity
+
+   subroutine compute_yplus(self, grd, icc, patch, RE)
+   !< Compute yplus on patches.
+   class(block_rst_object), intent(inout) :: self    !< Block data.
+   type(block_grd_object),  intent(in)    :: grd     !< Block grd data.
+   type(block_icc_object),  intent(in)    :: icc     !< Block icc data.
+   integer(I4P),            intent(in)    :: patch   !< Patch bc to be found.
+   real(R8P),               intent(in)    :: RE      !< Reynolds number.
+   type(vector)                           :: NdS     !< Normal "tilde" for viscous part of forces (or distance for y+).
+   integer(I4P)                           :: i,j,k,p !< Counter.
+   real(R8P)                              :: twall   !< Shear stress.
+   real(R8P)                              :: utau    !< Friction velocity.
+   real(R8P)                              :: ds      !< Face area.
+   integer(I4P)                           :: i1,i2   !< Counter.
+   integer(I4P)                           :: j1,j2   !< Counter.
+   integer(I4P)                           :: k1,k2   !< Counter.
+
+   if (.not.allocated(grd%patches_extents)) return
+   do p=1, size(grd%patches_extents, dim=1)
+      associate(face=>grd%patches_extents(p,0),                                   &
+                ci1=>grd%patches_extents(p,1 ), ci2=>grd%patches_extents(p,2 ),   &
+                cj1=>grd%patches_extents(p,3 ), cj2=>grd%patches_extents(p,4 ),   &
+                ck1=>grd%patches_extents(p,5 ), ck2=>grd%patches_extents(p,6 ),   &
+                ni1=>grd%patches_extents(p,7 ), ni2=>grd%patches_extents(p,8 ),   &
+                nj1=>grd%patches_extents(p,9 ), nj2=>grd%patches_extents(p,10),   &
+                nk1=>grd%patches_extents(p,11), nk2=>grd%patches_extents(p,12),   &
+                nodes=>grd%nodes, NFiS=>grd%NFiS, NFjS=>grd%NFjS, NFkS=>grd%NFkS, &
+                iicc=>icc%icc,ticc=>icc%tcc,                                      &
+                is_level_set=>self%is_level_set,                                  &
+                momentum=>self%momentum, f0=>self%level_set_zero, yplus=>self%yplus)
+      select case(face)
+      case(1,2)
+         !$omp parallel default(none) &
+         !$omp private(i,j,k,NdS)     &
+         !$omp shared(ni1,ni2,nj1,nj2,nk1,nk2,ci1,ci2,cj1,cj2,ck1,ck2,face,patch,nodes,NFiS,iicc,ticc,momentum,f0,RE,yplus)
+         !$omp do
+         i1=ni1; i2=i1+1
+         if (face==2) i2=i1-1
+         do k=ck1,ck2
+            do j=cj1,cj2
+               ! checking if this is an active cell
+               if (ticc(ni1-1+face,j,k)/=patch) cycle
+               if (iicc(ci1,j,k)/=0) cycle
+               if (is_level_set) then
+                  if (f0(ni1-1+face,j,k)>0._R8P) cycle
+               endif
+
+               ! distance from the patch
+               NdS = 0.25_R8P*(nodes(i1,j,k)+nodes(i1,j-1,k)+nodes(i1,j,k-1)+nodes(i1,j-1,k-1)) - &
+                     0.25_R8P*(nodes(i2,j,k)+nodes(i2,j-1,k)+nodes(i2,j,k-1)+nodes(i2,j-1,k-1))
+               NdS = 0.5_R8P*NdS
+               ds = sqrt( normL2(NFiS(ni1,j,k)) )
+               twall = normL2((momentum(ci1-1+face,j,k)-momentum(ci1-2+face,j,k)).ortho.NFiS(ni1,j,k))/abs(Nds.dot.NFiS(ni1,j,k))/RE
+               utau  = sqrt(twall)
+               yplus(ci1,j,k) = RE*utau*( abs(Nds.dot.NFiS(ni1,j,k)/ds) )
+            enddo
+         enddo
+      case(3,4)
+         !$omp parallel default(none) &
+         !$omp private(i,j,k,NdS)     &
+         !$omp shared(ni1,ni2,nj1,nj2,nk1,nk2,ci1,ci2,cj1,cj2,ck1,ck2,face,patch,nodes,NFjS,iicc,ticc,momentum,f0,RE,yplus)
+         !$omp do
+         j1=nj1; j2=j1+1
+         if (face==4) j2=j1-1
+         do k=ck1,ck2
+            do i=ci1,ci2
+               ! checking if this is an active cell
+               if (ticc(i,nj1-1+(face-2),k)/=patch) cycle
+               if (iicc(i,cj1,k)/=0) cycle
+               if (is_level_set) then
+                  if (f0(i,nj1-1+(face-2),k)>0._R8P) cycle
+               endif
+
+               ! distance from the patch
+               NdS = 0.25_R8P*(nodes(i,j1,k)+nodes(i-1,j1,k)+nodes(i,j1,k-1)+nodes(i-1,j1,k-1)) - &
+                     0.25_R8P*(nodes(i,j2,k)+nodes(i-1,j2,k)+nodes(i,j2,k-1)+nodes(i-1,j2,k-1))
+               NdS = 0.5_R8P*NdS
+               ds = sqrt( normL2(NFjS(i,nj1,k)) )
+               twall = normL2((momentum(i,cj1-1+(face-2),k) - momentum(i,cj1-2+(face-2),k)).ortho.NFjS(i,nj1,k))/ &
+                                   abs(Nds.dot.NFjS(i,nj1,k))/RE
+               utau  = sqrt(twall)
+               yplus(i,cj1,k) = RE*utau*( abs(Nds.dot.NFjS(i,nj1,k)/ds) )
+            enddo
+         enddo
+      case(5,6)
+         !$omp parallel default(none) &
+         !$omp private(i,j,k,NdS)     &
+         !$omp shared(ni1,ni2,nj1,nj2,nk1,nk2,ci1,ci2,cj1,cj2,ck1,ck2,face,patch,nodes,NFkS,iicc,ticc,momentum,f0,RE,yplus)
+         !$omp do
+         k1=nk1; k2=k1+1
+         if (face==6) k2=k1-1
+         do j=cj1,cj2
+            do i=ci1,ci2
+               ! checking if this is an active cell
+               if (ticc(i,j,nk1-1+(face-4))/=patch) cycle
+               if (iicc(i,j,ck1)/=0) cycle
+               if (is_level_set) then
+                   if (f0(i,j,nk1-1+(face-4))>0._R8P) cycle
+               endif
+
+               ! distance from the patch
+               NdS = 0.25_R8P*(nodes(i,j,k1)+nodes(i-1,j,k1)+nodes(i,j-1,k1)+nodes(i-1,j-1,k1)) - &
+                     0.25_R8P*(nodes(i,j,k2)+nodes(i-1,j,k2)+nodes(i,j-1,k2)+nodes(i-1,j-1,k2))
+               NdS = 0.5_R8P*NdS
+               ds = sqrt( normL2(NFkS(i,j,nk1)) )
+               twall = normL2((momentum(i,j,ck1-1+(face-4)) - momentum(i,j,ck1-2+(face-4))).ortho.NFkS(i,j,nk1))/ &
+                               abs(Nds.dot.NFkS(i,j,nk1))/RE
+               utau  = sqrt(twall)
+               yplus(i,j,ck1) = RE*utau*( abs(Nds.dot.NFkS(i,j,nk1)/ds) )
+            enddo
+         enddo
+      endselect
+      endassociate
+   enddo
+   endsubroutine compute_yplus
+
    elemental function has_level_set(self)
    !< Return true if solution has level set functions.
    class(block_rst_object), intent(in) :: self          !< Block data.
@@ -870,29 +827,49 @@ contains
    has_viscosity = allocated(self%viscosity)
    endfunction has_viscosity
 
-   subroutine init(self, Ni, Nj, Nk, gc, is_level_set, is_zeroeq, is_oneeq, is_twoeq, is_aux_to_compute)
+   subroutine init(self, Ni, Nj, Nk, gc, is_level_set, is_zeroeq, is_oneeq, is_twoeq,               &
+                   has_lambda2, has_qfactor, has_helicity, has_vorticity, has_div2LT, has_k_ratio,  &
+                   has_yplus, has_tau, has_div_tau, has_loads)
    !< Initialize block.
-   class(block_rst_object), intent(inout)        :: self              !< Block data.
-   integer(I4P),            intent(in)           :: Ni                !< Number of cells in i direction.
-   integer(I4P),            intent(in)           :: Nj                !< Number of cells in j direction.
-   integer(I4P),            intent(in)           :: Nk                !< Number of cells in k direction.
-   integer(I4P),            intent(in), optional :: gc(6)             !< Number of ghost cells.
-   logical,                 intent(in), optional :: is_level_set      !< Flag for level set function presence.
-   logical,                 intent(in), optional :: is_zeroeq         !< Use *zero* equations turbulence model.
-   logical,                 intent(in), optional :: is_oneeq          !< Use *one* equations turbulence model.
-   logical,                 intent(in), optional :: is_twoeq          !< Use *two* equations turbulence model.
-   logical,                 intent(in), optional :: is_aux_to_compute !< Flag to allocate also metrics arrays.
+   class(block_rst_object), intent(inout)        :: self          !< Block data.
+   integer(I4P),            intent(in)           :: Ni            !< Number of cells in i direction.
+   integer(I4P),            intent(in)           :: Nj            !< Number of cells in j direction.
+   integer(I4P),            intent(in)           :: Nk            !< Number of cells in k direction.
+   integer(I4P),            intent(in), optional :: gc(6)         !< Number of ghost cells.
+   logical,                 intent(in), optional :: is_level_set  !< Flag for level set function presence.
+   logical,                 intent(in), optional :: is_zeroeq     !< Use *zero* equations turbulence model.
+   logical,                 intent(in), optional :: is_oneeq      !< Use *one* equations turbulence model.
+   logical,                 intent(in), optional :: is_twoeq      !< Use *two* equations turbulence model.
+   logical,                 intent(in), optional :: has_lambda2   !< Solution has lamda2 field.
+   logical,                 intent(in), optional :: has_qfactor   !< Solution has qfactor field.
+   logical,                 intent(in), optional :: has_helicity  !< Solution has helicity field.
+   logical,                 intent(in), optional :: has_vorticity !< Solution has vorticity field.
+   logical,                 intent(in), optional :: has_div2LT    !< Solution has double divergence of Lighthill tensor.
+   logical,                 intent(in), optional :: has_k_ratio   !< Solution has kinetic energy ratio.
+   logical,                 intent(in), optional :: has_yplus     !< Solution has y+ field.
+   logical,                 intent(in), optional :: has_tau       !< Solution has tau field.
+   logical,                 intent(in), optional :: has_div_tau   !< Solution has divergence of tau field.
+   logical,                 intent(in), optional :: has_loads     !< Solution has loads (forces and torques).
 
    call self%destroy
    self%Ni = Ni
    self%Nj = Nj
    self%Nk = Nk
-   if (present(gc               )) self%gc           = gc
-   if (present(is_level_set     )) self%is_level_set = is_level_set
-   if (present(is_zeroeq        )) self%is_zeroeq    = is_zeroeq
-   if (present(is_oneeq         )) self%is_oneeq     = is_oneeq
-   if (present(is_twoeq         )) self%is_twoeq     = is_twoeq
-   if (present(is_aux_to_compute)) self%has_aux      = is_aux_to_compute
+   if (present(gc            )) self%gc            = gc
+   if (present(is_level_set  )) self%is_level_set  = is_level_set
+   if (present(is_zeroeq     )) self%is_zeroeq     = is_zeroeq
+   if (present(is_oneeq      )) self%is_oneeq      = is_oneeq
+   if (present(is_twoeq      )) self%is_twoeq      = is_twoeq
+   if (present(has_lambda2   )) self%has_lambda2   = has_lambda2
+   if (present(has_qfactor   )) self%has_qfactor   = has_qfactor
+   if (present(has_helicity  )) self%has_helicity  = has_helicity
+   if (present(has_vorticity )) self%has_vorticity = has_vorticity
+   if (present(has_div2LT    )) self%has_div2LT    = has_div2LT
+   if (present(has_k_ratio   )) self%has_k_ratio   = has_k_ratio
+   if (present(has_yplus     )) self%has_yplus     = has_yplus
+   if (present(has_tau       )) self%has_tau       = has_tau
+   if (present(has_div_tau   )) self%has_div_tau   = has_div_tau
+   if (present(has_loads     )) self%has_loads     = has_loads
    call self%alloc
    endsubroutine init
 
@@ -935,6 +912,12 @@ contains
       tmp = self%vorticity%y ; call interpolate_R8P(var=tmp, vari=self%vorticity%y)
       tmp = self%vorticity%z ; call interpolate_R8P(var=tmp, vari=self%vorticity%z)
    endif
+   if (allocated(self%div2LT)) then
+      tmp = self%div2LT ; call interpolate_R8P(var=tmp, vari=self%div2LT)
+   endif
+   if (allocated(self%k_ratio)) then
+      tmp = self%k_ratio ; call interpolate_R8P(var=tmp, vari=self%k_ratio)
+   endif
    contains
       subroutine interpolate_R8P(var, vari)
       !< Interpolate a real(R8P) scalar.
@@ -957,7 +940,9 @@ contains
       endsubroutine interpolate_R8P
    endsubroutine interpolate_at_nodes
 
-   subroutine load_dimensions(self, file_unit, is_level_set, is_zeroeq, is_oneeq, is_twoeq, is_aux_to_compute)
+   subroutine load_dimensions(self, file_unit, is_level_set, is_zeroeq, is_oneeq, is_twoeq,                                     &
+                              compute_lambda2,compute_qfactor,compute_helicity,compute_vorticity,compute_div2LT,compute_k_ratio,&
+                              compute_yplus,compute_tau,compute_div_tau,compute_loads)
    !< Load block dimensions from file.
    !<
    !< @note The solution file must be already open and the current record-index must be at the proper block dimensions record.
@@ -967,7 +952,16 @@ contains
    logical,                 intent(in), optional :: is_zeroeq         !< Use *zero* equations turbulence model.
    logical,                 intent(in), optional :: is_oneeq          !< Use *one* equations turbulence model.
    logical,                 intent(in), optional :: is_twoeq          !< Use *two* equations turbulence model.
-   logical,                 intent(in), optional :: is_aux_to_compute !< Flag to allocate also metrics arrays.
+   logical,                 intent(in), optional :: compute_lambda2   !< Compute lamda2 field.
+   logical,                 intent(in), optional :: compute_qfactor   !< Compute qfactor field.
+   logical,                 intent(in), optional :: compute_helicity  !< Compute helicity field.
+   logical,                 intent(in), optional :: compute_vorticity !< Compute vorticity field.
+   logical,                 intent(in), optional :: compute_div2LT    !< Compute double divergence of Lighthill tensor.
+   logical,                 intent(in), optional :: compute_k_ratio   !< Compute kinetic energy ratio.
+   logical,                 intent(in), optional :: compute_yplus     !< Compute y+ field.
+   logical,                 intent(in), optional :: compute_tau       !< Compute tau field.
+   logical,                 intent(in), optional :: compute_div_tau   !< Compute divergence of tau field.
+   logical,                 intent(in), optional :: compute_loads     !< Compute loads (forces and torques).
    integer(I4P)                                  :: Ni                !< Number of cells in i direction.
    integer(I4P)                                  :: Nj                !< Number of cells in j direction.
    integer(I4P)                                  :: Nk                !< Number of cells in k direction.
@@ -977,25 +971,33 @@ contains
    read(file_unit, end=10, err=10) Ni, Nj, Nk, gc
    10 continue
    if (all(gc >= 0)) then
-      call self%init(Ni=Ni,Nj=Nj,Nk=Nk,gc=gc,                                                          &
-                     is_level_set=is_level_set,is_zeroeq=is_zeroeq,is_oneeq=is_oneeq,is_twoeq=is_twoeq,&
-                     is_aux_to_compute=is_aux_to_compute)
+      call self%init(Ni=Ni,Nj=Nj,Nk=Nk,gc=gc,                                                               &
+                     is_level_set=is_level_set,is_zeroeq=is_zeroeq,is_oneeq=is_oneeq,is_twoeq=is_twoeq,     &
+                     has_lambda2=compute_lambda2,has_qfactor=compute_qfactor,has_helicity=compute_helicity, &
+                     has_vorticity=compute_vorticity,has_div2LT=compute_div2LT,has_k_ratio=compute_k_ratio, &
+                     has_yplus=compute_yplus,has_tau=compute_tau,has_div_tau=compute_div_tau,has_loads=compute_loads)
    else
-      call self%init(Ni=Ni,Nj=Nj,Nk=Nk,                                                                &
-                     is_level_set=is_level_set,is_zeroeq=is_zeroeq,is_oneeq=is_oneeq,is_twoeq=is_twoeq,&
-                     is_aux_to_compute=is_aux_to_compute)
+      call self%init(Ni=Ni,Nj=Nj,Nk=Nk,                                                                     &
+                     is_level_set=is_level_set,is_zeroeq=is_zeroeq,is_oneeq=is_oneeq,is_twoeq=is_twoeq,     &
+                     has_lambda2=compute_lambda2,has_qfactor=compute_qfactor,has_helicity=compute_helicity, &
+                     has_vorticity=compute_vorticity,has_div2LT=compute_div2LT,has_k_ratio=compute_k_ratio, &
+                     has_yplus=compute_yplus,has_tau=compute_tau,has_div_tau=compute_div_tau,has_loads=compute_loads)
    endif
    endsubroutine load_dimensions
 
-   subroutine load_solution(self, file_unit, is_cell_centered, is_aux_to_compute, grd)
+   subroutine load_solution(self, file_unit, grd, icc, is_cell_centered, patch, RE, rFR2, zfs)
    !< Load block solution from file.
    !<
    !< @note The solution file must be already open and the current record-index must be at the proper block nodes record.
    class(block_rst_object), intent(inout)        :: self              !< Block data.
    integer(I4P),            intent(in)           :: file_unit         !< Logical file unit.
+   type(block_grd_object),  intent(in)           :: grd               !< Block grd data.
+   type(block_icc_object),  intent(in)           :: icc               !< Block icc data.
    logical,                 intent(in), optional :: is_cell_centered  !< Define variables at cell centers or nodes.
-   logical,                 intent(in), optional :: is_aux_to_compute !< Flag to allocate also metrics arrays.
-   type(block_grd_object),  intent(in), optional :: grd               !< Block grd data.
+   integer(I4P),            intent(in), optional :: patch             !< Patch boundary conditions.
+   real(R8P),               intent(in), optional :: RE                !< Reynolds number.
+   real(R8P),               intent(in), optional :: rFR2              !< 1/(Froude number)^2.
+   real(R8P),               intent(in), optional :: zfs               !< Z quote of free surface.
    integer(I4P)                                  :: i                 !< Counter.
    integer(I4P)                                  :: j                 !< Counter.
    integer(I4P)                                  :: k                 !< Counter.
@@ -1019,9 +1021,7 @@ contains
       endif
    endassociate
    self%is_loaded = .true.
-   if (present(is_aux_to_compute)) then
-      if (is_aux_to_compute.and.present(grd)) call self%compute_aux(grd)
-   endif
+   call self%compute_aux(grd=grd, icc=icc, patch=patch, RE=RE, rFR2=rFR2, zfs=zfs)
    if (present(is_cell_centered)) then
       if (.not.is_cell_centered) call self%interpolate_at_nodes
    endif
@@ -1075,55 +1075,4 @@ contains
       endif
    endassociate
    endsubroutine save_solution
-
-   ! non TBP methods
-   function gradient_cell(Fi, Fj, Fk, volume) result(gv)
-   !< Return the (3D) gradient (by finite volume approach) of a scalar in a cell given its fluxes.
-   real(R8P), intent(in) :: Fi(3,3,2,2,2) !< Variable fluxes (3,3,i:i-1,j:j-1,k:k-1) in i direction.
-   real(R8P), intent(in) :: Fj(3,3,2,2,2) !< Variable fluxes (3,3,i:i-1,j:j-1,k:k-1) in j direction.
-   real(R8P), intent(in) :: Fk(3,3,2,2,2) !< Variable fluxes (3,3,i:i-1,j:j-1,k:k-1) in k direction.
-   real(R8P), intent(in) :: volume        !< Cell volume.
-   real(R8P)             :: gv(3,3)       !< Divergence.
-   real(R8P), parameter  :: EPS12=1d-12   !< Tolerances.
-   integer(I4P)          :: i, j          !< Counter.
-
-   do j=1,3
-      do i=1,3
-         gv(i,j)  = Fi(i,j,2,2,2)-Fi(i,j,1,2,2) &
-                  + Fj(i,j,2,2,2)-Fj(i,j,2,1,2) &
-                  + Fk(i,j,2,2,2)-Fk(i,j,2,2,1)
-         gv(i,j)  = gv(i,j)/max(eps12,volume)
-      enddo
-   enddo
-   endfunction gradient_cell
-
-   function fluxes(NFS, var, tensor) result(F)
-   !< Return the fluxes of a vector (or diadic tensor).
-   type(vector), intent(in)           :: NFS    !< Cell metrics.
-   type(vector), intent(in)           :: var    !< Input variable.
-   logical,      intent(in), optional :: tensor !< Input variable is a tensor-like.
-   real(R8P)                          :: F(3,3) !< Variable fluxes.
-
-   if (present(tensor)) then
-      F(1,1) = (var%x*var%x)*NFS%x
-      F(1,2) = (var%x*var%y)*NFS%y
-      F(1,3) = (var%x*var%z)*NFS%z
-      F(2,1) = (var%y*var%x)*NFS%x
-      F(2,2) = (var%y*var%y)*NFS%y
-      F(2,3) = (var%y*var%z)*NFS%z
-      F(3,1) = (var%z*var%x)*NFS%x
-      F(3,2) = (var%z*var%y)*NFS%y
-      F(3,3) = (var%z*var%z)*NFS%z
-   else
-      F(1,1) = var%x*NFS%x
-      F(1,2) = var%x*NFS%y
-      F(1,3) = var%x*NFS%z
-      F(2,1) = var%y*NFS%x
-      F(2,2) = var%y*NFS%y
-      F(2,3) = var%y*NFS%z
-      F(3,1) = var%z*NFS%x
-      F(3,2) = var%z*NFS%y
-      F(3,3) = var%z*NFS%z
-   endif
-   endfunction fluxes
 endmodule xview_block_rst_object

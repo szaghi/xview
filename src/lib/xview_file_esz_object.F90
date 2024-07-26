@@ -30,25 +30,59 @@ contains
    call self%block_esz%destroy
    endsubroutine destroy
 
-   subroutine load_file(self, filename, is_level_set, is_zeroeq, is_oneeq, is_twoeq, verbose)
+   subroutine load_file(self,filename,is_cell_centered,patch,RE,rFR2,zfs,is_level_set,is_zeroeq,is_oneeq,is_twoeq, &
+                        compute_metrics,compute_lambda2,compute_qfactor,compute_helicity,compute_vorticity,        &
+                        compute_div2LT,compute_k_ratio,compute_yplus,compute_tau,compute_div_tau,compute_loads,verbose)
    !< Load file.
-   class(file_esz_object), intent(inout)        :: self         !< File data.
-   character(*),           intent(in)           :: filename     !< File name of geo file.
-   logical,                intent(in), optional :: is_level_set !< Flag for level set function presence.
-   logical,                intent(in), optional :: is_zeroeq    !< Use *zero* equations turbulence model.
-   logical,                intent(in), optional :: is_oneeq     !< Use *one* equations turbulence model.
-   logical,                intent(in), optional :: is_twoeq     !< Use *two* equations turbulence model.
-   logical,                intent(in), optional :: verbose      !< Activate verbose mode.
-   logical                                      :: verbose_     !< Activate verbose mode, local variable.
-   integer(I4P)                                 :: file_unit    !< Logical file unit.
+   class(file_esz_object), intent(inout)        :: self              !< File data.
+   character(*),           intent(in)           :: filename          !< File name of geo file.
+   logical,                intent(in), optional :: is_cell_centered  !< Define variables at cell centers or nodes.
+   integer(I4P),           intent(in), optional :: patch             !< Patch boundary conditions.
+   real(R8P),              intent(in), optional :: RE                !< Reynolds number.
+   real(R8P),              intent(in), optional :: rFR2              !< 1/(Froude number)^2.
+   real(R8P),              intent(in), optional :: zfs               !< Z quote of free surface.
+   logical,                intent(in), optional :: is_level_set      !< Flag for level set function presence.
+   logical,                intent(in), optional :: is_zeroeq         !< Use *zero* equations turbulence model.
+   logical,                intent(in), optional :: is_oneeq          !< Use *one* equations turbulence model.
+   logical,                intent(in), optional :: is_twoeq          !< Use *two* equations turbulence model.
+   logical,                intent(in), optional :: compute_metrics   !< Compute metrics.
+   logical,                intent(in), optional :: compute_lambda2   !< Compute lamda2 field.
+   logical,                intent(in), optional :: compute_qfactor   !< Compute qfactor field.
+   logical,                intent(in), optional :: compute_helicity  !< Compute helicity field.
+   logical,                intent(in), optional :: compute_vorticity !< Compute vorticity field.
+   logical,                intent(in), optional :: compute_div2LT    !< Compute double divergence of Lighthill tensor.
+   logical,                intent(in), optional :: compute_k_ratio   !< Compute kinetic energy ratio.
+   logical,                intent(in), optional :: compute_yplus     !< Compute y+ field.
+   logical,                intent(in), optional :: compute_tau       !< Compute tau field.
+   logical,                intent(in), optional :: compute_div_tau   !< Compute divergence of tau field.
+   logical,                intent(in), optional :: compute_loads     !< Compute loads (forces and torques).
+   logical,                intent(in), optional :: verbose           !< Activate verbose mode.
+   logical                                      :: verbose_          !< Activate verbose mode, local variable.
+   integer(I4P)                                 :: file_unit         !< Logical file unit.
 
    call self%destroy
    verbose_ = .false. ; if (present(verbose)) verbose_ = verbose
    self%filename = trim(adjustl(filename))
    if (self%is_file_present()) then
       open(newunit=file_unit, file=trim(adjustl(filename)), form='unformatted', action='read')
-      call self%block_esz%load_solution(file_unit=file_unit, &
-                                        is_level_set=is_level_set, is_zeroeq=is_zeroeq, is_oneeq=is_oneeq, is_twoeq=is_twoeq)
+      call self%block_esz%load_solution(file_unit=file_unit,                 &
+                                        is_cell_centered=is_cell_centered,   &
+                                        patch=patch,                         &
+                                        RE=RE, rFR2=rFR2, zfs=zfs,           &
+                                        is_level_set=is_level_set,           &
+                                        is_zeroeq=is_zeroeq,                 &
+                                        is_oneeq=is_oneeq,                   &
+                                        is_twoeq=is_twoeq,                   &
+                                        compute_lambda2=compute_lambda2,     &
+                                        compute_qfactor=compute_qfactor,     &
+                                        compute_helicity=compute_helicity,   &
+                                        compute_vorticity=compute_vorticity, &
+                                        compute_div2LT=compute_div2LT,       &
+                                        compute_k_ratio=compute_k_ratio,     &
+                                        compute_yplus=compute_yplus,         &
+                                        compute_tau=compute_tau,             &
+                                        compute_div_tau=compute_div_tau,     &
+                                        compute_loads=compute_loads)
       close(file_unit)
       self%is_loaded = .true.
    else

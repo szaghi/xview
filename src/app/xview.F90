@@ -183,13 +183,14 @@ contains
       do t=1, Nt
          do b=1, blocks_number
             if (ui%verbose) print '(A)', ' Postprocess files "'//trim(ui%ipath)//filenames_esz(b,t)//'"'
-            call postprocess_esz(ui           = ui,                                                              &
-                                 myrank       = myrank,                                                          &
-                                 ipath        = trim(adjustl(ui%ipath)),                                         &
-                                 filename_esz = filenames_esz(b,t)%chars(),                                      &
-                                 opath        = trim(adjustl(ui%opath)),                                         &
+            call postprocess_esz(ui           = ui,                             &
+                                 myrank       = myrank,                         &
+                                 ipath        = trim(adjustl(ui%ipath)),        &
+                                 filename_esz = filenames_esz(b,t)%chars(),     &
+                                 opath        = trim(adjustl(ui%opath)),        &
                                  basename_out = trim(adjustl(ui%basename_out)), &
-                                 files_blocks = files_blocks(:,b))
+                                 files_blocks = files_blocks(:,b),              &
+                                 patch=patch)
          enddo
          if (ui%is_vtk) then
             call file_vtk%save_blocks_file_vtm(file_name=trim(adjustl(ui%opath))//                                               &
@@ -226,27 +227,42 @@ contains
    endif
    endsubroutine postprocess
 
-   subroutine postprocess_esz(ui,myrank,ipath,filename_esz,opath,basename_out,files_blocks)
+   subroutine postprocess_esz(ui,myrank,ipath,filename_esz,opath,basename_out,files_blocks,patch)
    !< Post process single Extracted SubZone (esz) input file.
-   type(ui_object), intent(in)    :: ui              !< User Interface.
-   integer(I4P),    intent(in)    :: myrank          !< Input files process rank in proc.input.
-   character(*),    intent(in)    :: ipath           !< Path to input files.
-   character(*),    intent(in)    :: filename_esz    !< File name of file sol (subzone solution).
-   character(*),    intent(in)    :: opath           !< Path to output files.
-   character(*),    intent(in)    :: basename_out    !< Base name of output files.
-   type(string),    intent(inout) :: files_blocks(3) !< Files blocks grouping.
-   integer(I4P)                   :: blocks_map(2)   !< Processors/Blocks maps.
-   type(string)                   :: buffer          !< String buffer.
-   type(string), allocatable      :: tokens(:)       !< String tokens buffer.
-   type(file_esz_object)          :: file_esz        !< File esz.
-   type(file_vtk_object)          :: file_vtk        !< File VTK.
-   type(file_tec_object)          :: file_tec        !< File TEC.
+   type(ui_object), intent(in)           :: ui              !< User Interface.
+   integer(I4P),    intent(in)           :: myrank          !< Input files process rank in proc.input.
+   character(*),    intent(in)           :: ipath           !< Path to input files.
+   character(*),    intent(in)           :: filename_esz    !< File name of file sol (subzone solution).
+   character(*),    intent(in)           :: opath           !< Path to output files.
+   character(*),    intent(in)           :: basename_out    !< Base name of output files.
+   type(string),    intent(inout)        :: files_blocks(3) !< Files blocks grouping.
+   integer(I4P),    intent(in), optional :: patch           !< Patch boundary conditions.
+   integer(I4P)                          :: blocks_map(2)   !< Processors/Blocks maps.
+   type(string)                          :: buffer          !< String buffer.
+   type(string), allocatable             :: tokens(:)       !< String tokens buffer.
+   type(file_esz_object)                 :: file_esz        !< File esz.
+   type(file_vtk_object)                 :: file_vtk        !< File VTK.
+   type(file_tec_object)                 :: file_tec        !< File TEC.
 
-   if (filename_esz/=OPT_UNSET) call file_esz%load_file(filename=ipath//filename_esz, verbose=ui%verbose, &
-                                                        is_level_set=ui%is_level_set,                     &
-                                                        is_zeroeq=ui%is_zeroeq,                           &
-                                                        is_oneeq=ui%is_oneeq,                             &
-                                                        is_twoeq=ui%is_twoeq)
+   if (filename_esz/=OPT_UNSET) call file_esz%load_file(filename=ipath//filename_esz,           &
+                                                        patch=patch,                            &
+                                                        RE=ui%RE, rFR2=ui%rFR2, zfs=ui%zfs,     &
+                                                        is_level_set=ui%is_level_set,           &
+                                                        is_zeroeq=ui%is_zeroeq,                 &
+                                                        is_oneeq=ui%is_oneeq,                   &
+                                                        is_twoeq=ui%is_twoeq,                   &
+                                                        is_cell_centered=ui%is_cell_centered,   &
+                                                        compute_lambda2=ui%compute_lambda2,     &
+                                                        compute_qfactor=ui%compute_qfactor,     &
+                                                        compute_helicity=ui%compute_helicity,   &
+                                                        compute_vorticity=ui%compute_vorticity, &
+                                                        compute_div2LT=ui%compute_div2LT,       &
+                                                        compute_k_ratio=ui%compute_k_ratio,     &
+                                                        compute_yplus=ui%compute_yplus,         &
+                                                        compute_tau=ui%compute_tau,             &
+                                                        compute_div_tau=ui%compute_div_tau,     &
+                                                        compute_loads=ui%compute_loads,         &
+                                                        verbose=ui%verbose)
    if (ui%is_vtk) then
       call file_vtk%initialize(path=trim(adjustl(ui%opath)), file_name=trim(adjustl(basename_out)))
       files_blocks(1) = ''
@@ -258,7 +274,6 @@ contains
       blocks_map(2) = tokens(2)%to_number(kind=1_I4P)
       if (file_esz%is_loaded) &
          call file_vtk%save_block_file_vtk(is_binary=.not.ui%is_ascii, &
-                                           save_aux=.true.,            &
                                            blocks_map=blocks_map,      &
                                            grd=file_esz%block_esz%grd, &
                                            is_cell_centered=.false.,   &
@@ -281,13 +296,11 @@ contains
                                is_level_set=ui%is_level_set, &
                                is_zeroeq=ui%is_zeroeq,       &
                                is_oneeq=ui%is_oneeq,         &
-                               is_twoeq=ui%is_twoeq,         &
-                               save_aux=.true.)
+                               is_twoeq=ui%is_twoeq)
       call file_tec%save_block_file_tec(is_binary=.not.ui%is_ascii, &
                                         blocks_map=blocks_map,      &
                                         grd=file_esz%block_esz%grd, &
                                         is_cell_centered=.false.,   &
-                                        save_aux=.true.,            &
                                         icc=file_esz%block_esz%icc, &
                                         sol=file_esz%block_esz%sol)
       call file_tec%finalize(is_binary=.not.ui%is_ascii)
@@ -315,42 +328,42 @@ contains
    type(string)                          :: basename        !< Current file basename.
    integer(I4P)                          :: b               !< Counter.
 
-   if (filename_grd/=OPT_UNSET) call file_grd%load_file(filename=ipath//filename_grd, &
-                                                        is_metrics_to_compute=ui%do_compute_aux, verbose=ui%verbose)
+   if (filename_grd/=OPT_UNSET) call file_grd%load_file(filename=ipath//filename_grd,       &
+                                                        compute_metrics=ui%compute_metrics, &
+                                                        verbose=ui%verbose)
    if (file_grd%is_loaded) then
-      if (filename_icc/=OPT_UNSET) call file_icc%load_file(filename=ipath//filename_icc, verbose=ui%verbose)
-      ! compute patches extents if patch is queried or whole blocks extensts
-      do b=1, file_grd%blocks_number
-         if (file_icc%is_loaded.and.present(patch)) then
-            ! specific BC has been queried
-            call file_grd%blocks(b)%compute_patches_extents(tcc=file_icc%blocks(b)%tcc, patch=patch)
+      if (filename_icc/=OPT_UNSET) call file_icc%load_file(filename=ipath//filename_icc,         &
+                                                           file_grd=file_grd,                    &
+                                                           correct_metrics=ui%compute_metrics,   &
+                                                           is_cell_centered=ui%is_cell_centered, &
+                                                           verbose=ui%verbose)
+      call file_icc%compute_patches_extents(file_grd=file_grd, patch=patch)
+      if (filename_rst/=OPT_UNSET) then
+         if (file_icc%is_loaded) then
+            call file_rst%load_file(file_grd=file_grd,                      &
+                                    file_icc=file_icc,                      &
+                                    filename=ipath//filename_rst,           &
+                                    patch=patch,                            &
+                                    RE=ui%RE, rFR2=ui%rFR2, zfs=ui%zfs,     &
+                                    is_level_set=ui%is_level_set,           &
+                                    is_zeroeq=ui%is_zeroeq,                 &
+                                    is_oneeq=ui%is_oneeq,                   &
+                                    is_twoeq=ui%is_twoeq,                   &
+                                    is_cell_centered=ui%is_cell_centered,   &
+                                    compute_lambda2=ui%compute_lambda2,     &
+                                    compute_qfactor=ui%compute_qfactor,     &
+                                    compute_helicity=ui%compute_helicity,   &
+                                    compute_vorticity=ui%compute_vorticity, &
+                                    compute_div2LT=ui%compute_div2LT,       &
+                                    compute_k_ratio=ui%compute_k_ratio,     &
+                                    compute_yplus=ui%compute_yplus,         &
+                                    compute_tau=ui%compute_tau,             &
+                                    compute_div_tau=ui%compute_div_tau,     &
+                                    compute_loads=ui%compute_loads,         &
+                                    verbose=ui%verbose)
          else
-            ! whole blocks extents have been queried
-            call file_grd%blocks(b)%compute_patches_extents
+            write(stderr, '(A)') 'error: to load restart also file icc file must be loaded'
          endif
-      enddo
-      if (file_icc%is_loaded) then
-         if (ui%do_compute_aux) then
-            do b=1, file_grd%blocks_number
-               call file_grd%blocks(b)%correct_metrics_bc(tcc=file_icc%blocks(b)%tcc)
-            enddo
-          endif
-      endif
-      if (filename_rst/=OPT_UNSET) call file_rst%load_file(file_grd=file_grd,                                &
-                                                           filename=ipath//filename_rst, verbose=ui%verbose, &
-                                                           is_level_set=ui%is_level_set,                     &
-                                                           is_zeroeq=ui%is_zeroeq,                           &
-                                                           is_oneeq=ui%is_oneeq,                             &
-                                                           is_twoeq=ui%is_twoeq,                             &
-                                                           is_cell_centered=ui%is_cell_centered,             &
-                                                           is_aux_to_compute=ui%do_compute_aux)
-      if (file_icc%is_loaded.and.file_rst%is_loaded.and.ui%do_compute_aux.and.present(patch)) then
-         do b=1, file_grd%blocks_number
-            call file_rst%blocks(b)%compute_loads(grd=file_grd%blocks(b), icc=file_icc%blocks(b), patch=patch, RE=ui%RE, &
-                                                  rFR2=ui%rFR2, zfs=ui%zfs)
-            call file_rst%blocks(b)%compute_yplus(grd=file_grd%blocks(b), icc=file_icc%blocks(b), patch=patch, RE=ui%RE)
-            call file_rst%blocks(b)%compute_tau(  grd=file_grd%blocks(b), icc=file_icc%blocks(b), patch=patch, RE=ui%RE)
-         enddo
       endif
       if (ui%is_vtk) then
          call file_vtk%initialize(path=trim(adjustl(ui%opath)), file_name=trim(adjustl(basename_out)))
@@ -366,7 +379,6 @@ contains
                ! save all grd, icc and sol
                do b=1, file_grd%blocks_number
                   call file_vtk%save_block_file_vtk(is_binary=.not.ui%is_ascii,           &
-                                                    save_aux=ui%do_compute_aux,           &
                                                     blocks_map=blocks_map(:,b),           &
                                                     grd=file_grd%blocks(b),               &
                                                     is_cell_centered=ui%is_cell_centered, &
@@ -379,7 +391,6 @@ contains
                ! save grd and icc
                do b=1, file_grd%blocks_number
                   call file_vtk%save_block_file_vtk(is_binary=.not.ui%is_ascii,           &
-                                                    save_aux=ui%do_compute_aux,           &
                                                     blocks_map=blocks_map(:,b),           &
                                                     grd=file_grd%blocks(b),               &
                                                     is_cell_centered=ui%is_cell_centered, &
@@ -392,12 +403,34 @@ contains
             ! save only grd without icc and sol
             do b=1, file_grd%blocks_number
                call file_vtk%save_block_file_vtk(is_binary=.not.ui%is_ascii,           &
-                                                 save_aux=ui%do_compute_aux,           &
                                                  blocks_map=blocks_map(:,b),           &
                                                  grd=file_grd%blocks(b),               &
                                                  is_cell_centered=ui%is_cell_centered, &
                                                  files_blocks=files_blocks)
             enddo
+         endif
+      endif
+      if (ui%is_tec) then
+         blocks_map = ui%file_procinput%processor_map(processor=myrank, blocks_number=file_grd%blocks_number)
+         if (file_icc%is_loaded) then
+            if (file_rst%is_loaded) then
+               call file_tec%initialize(path=trim(adjustl(ui%opath)),          &
+                                        file_name=trim(adjustl(basename_out)), &
+                                        is_binary=.not.ui%is_ascii,            &
+                                        is_cell_centered=ui%is_cell_centered,  &
+                                        file_icc=file_icc,                     &
+                                        file_sol=file_rst)
+
+               do b=1, file_grd%blocks_number
+                  call file_tec%save_block_file_tec(is_binary=.not.ui%is_ascii,           &
+                                                    blocks_map=blocks_map(:,b),           &
+                                                    grd=file_grd%blocks(b),               &
+                                                    is_cell_centered=ui%is_cell_centered, &
+                                                    icc=file_icc%blocks(b),               &
+                                                    sol=file_rst%blocks(b))
+               enddo
+               call file_tec%finalize(is_binary=.not.ui%is_ascii)
+            endif
          endif
       endif
    else

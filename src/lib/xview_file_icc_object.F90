@@ -6,6 +6,7 @@ use penf
 
 use xview_block_icc_object
 use xview_file_object
+use xview_file_grd_object
 
 implicit none
 private
@@ -19,10 +20,11 @@ type, extends(file_object) :: file_icc_object
    real(R4P), allocatable              :: rcc(:)               !< rcc unstructured array.
    contains
       ! public methods
-      procedure, pass(self) :: destroy         !< Destroy dynamic memory.
-      procedure, pass(self) :: alloc           !< Allocate dynamic memory.
-      procedure, pass(self) :: load_file       !< Load file.
-      procedure, pass(self) :: save_file       !< Save file.
+      procedure, pass(self) :: destroy                 !< Destroy dynamic memory.
+      procedure, pass(self) :: alloc                   !< Allocate dynamic memory.
+      procedure, pass(self) :: compute_patches_extents !< Compute patches extents for given bc or whole block extents.
+      procedure, pass(self) :: load_file               !< Load file.
+      procedure, pass(self) :: save_file               !< Save file.
 endtype file_icc_object
 
 contains
@@ -57,10 +59,31 @@ contains
    endif
    endsubroutine alloc
 
-   subroutine load_file(self, filename, is_cell_centered, verbose)
+   pure subroutine compute_patches_extents(self, file_grd, patch, offset)
+   !< Compute the patches extents of given patch boundary conditions or the use the whole block.
+   class(file_icc_object), intent(in)           :: self     !< File icc data.
+   type(file_grd_object),  intent(inout)        :: file_grd !< File grd data.
+   integer(I4P),           intent(in), optional :: patch    !< Patch bc to be found.
+   integer(I4P),           intent(in), optional :: offset   !< Offset from patch.
+   integer(I4P)                                 :: b        !< Counter.
+
+   do b=1, file_grd%blocks_number
+      if (self%is_loaded.and.present(patch)) then
+         ! specific BC has been queried
+         call file_grd%blocks(b)%compute_patches_extents(tcc=self%blocks(b)%tcc, patch=patch)
+      else
+         ! whole blocks extents have been queried
+         call file_grd%blocks(b)%compute_patches_extents
+      endif
+   enddo
+   endsubroutine compute_patches_extents
+
+   subroutine load_file(self, filename, file_grd, correct_metrics, is_cell_centered, verbose)
    !< Load file.
    class(file_icc_object), intent(inout)        :: self             !< File data.
    character(*),           intent(in)           :: filename         !< File name.
+   type(file_grd_object),  intent(inout)        :: file_grd         !< File grd data.
+   logical,                intent(in)           :: correct_metrics  !< Flag to activate the correction of metrics.
    logical,                intent(in), optional :: is_cell_centered !< Define variables at cell centers or nodes.
    logical,                intent(in), optional :: verbose          !< Activate verbose mode.
    logical                                      :: verbose_         !< Activate verbose mode, local variable.
@@ -93,6 +116,11 @@ contains
    do b=1, self%blocks_number
       call self%blocks(b)%compute_cc(rcc=self%rcc, is_cell_centered=is_cell_centered)
    enddo
+   if (correct_metrics) then
+      do b=1, file_grd%blocks_number
+         call file_grd%blocks(b)%correct_metrics_bc(tcc=self%blocks(b)%tcc)
+      enddo
+   endif
    endsubroutine load_file
 
    subroutine save_file(self, filename)

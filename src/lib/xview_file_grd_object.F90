@@ -48,17 +48,17 @@ contains
    allocate(self%blocks(1:self%blocks_number))
    endsubroutine alloc
 
-   subroutine load_file(self, filename, is_centers_to_compute, is_extents_to_compute, is_metrics_to_compute, verbose)
+   subroutine load_file(self, filename, compute_centers, compute_extents, compute_metrics, verbose)
    !< Load file.
-   class(file_grd_object), intent(inout)        :: self                  !< File data.
-   character(*),           intent(in)           :: filename              !< File name.
-   logical,                intent(in), optional :: is_centers_to_compute !< Flag to activate the computation of cell centers.
-   logical,                intent(in), optional :: is_extents_to_compute !< Flag to activate the computation of extents.
-   logical,                intent(in), optional :: is_metrics_to_compute !< Flag to activate the computation of metrics.
-   logical,                intent(in), optional :: verbose               !< Activate verbose mode.
-   logical                                      :: verbose_              !< Activate verbose mode, local variable.
-   integer(I4P)                                 :: file_unit             !< Logical file unit.
-   integer(I4P)                                 :: b                     !< Counter.
+   class(file_grd_object), intent(inout)        :: self            !< File data.
+   character(*),           intent(in)           :: filename        !< File name.
+   logical,                intent(in), optional :: compute_centers !< Flag to activate the computation of cell centers.
+   logical,                intent(in), optional :: compute_extents !< Flag to activate the computation of extents.
+   logical,                intent(in), optional :: compute_metrics !< Flag to activate the computation of metrics.
+   logical,                intent(in), optional :: verbose         !< Activate verbose mode.
+   logical                                      :: verbose_        !< Activate verbose mode, local variable.
+   integer(I4P)                                 :: file_unit       !< Logical file unit.
+   integer(I4P)                                 :: b               !< Counter.
 
    call self%destroy
    verbose_ = .false. ; if (present(verbose)) verbose_ = verbose
@@ -68,15 +68,15 @@ contains
       read(file_unit, end=10, err=10) self%blocks_number
       call self%alloc
       do b=1, self%blocks_number
-         call self%blocks(b)%load_dimensions(file_unit=file_unit,                          &
-                                             is_centers_to_allocate=is_centers_to_compute, &
-                                             is_extents_to_allocate=is_extents_to_compute, &
-                                             is_metrics_to_allocate=is_metrics_to_compute)
+         call self%blocks(b)%load_dimensions(file_unit=file_unit,                    &
+                                             is_centers_to_allocate=compute_centers, &
+                                             is_extents_to_allocate=compute_extents, &
+                                             is_metrics_to_allocate=compute_metrics)
       enddo
       do b=1, self%blocks_number
          call self%blocks(b)%load_nodes(file_unit=file_unit)
-         if (present(is_metrics_to_compute)) then
-            if (is_metrics_to_compute) call self%blocks(b)%compute_metrics
+         if (present(compute_metrics)) then
+            if (compute_metrics) call self%blocks(b)%compute_metrics
          endif
       enddo
       10 close(file_unit)
