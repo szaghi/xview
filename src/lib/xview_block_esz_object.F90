@@ -66,7 +66,7 @@ contains
    logical,                 intent(in), optional :: compute_helicity  !< Compute helicity field.
    logical,                 intent(in), optional :: compute_vorticity !< Compute vorticity field.
    logical,                 intent(in), optional :: compute_div2LT    !< Compute double divergence of Lighthill tensor.
-   logical,                 intent(in), optional :: compute_k_ratio   !< Compute kinetic energy ratio.
+   logical,                 intent(in), optional :: compute_grad_p    !< Compute pressure gradient.
    logical,                 intent(in), optional :: compute_yplus     !< Compute y+ field.
    logical,                 intent(in), optional :: compute_tau       !< Compute tau field.
    logical,                 intent(in), optional :: compute_div_tau   !< Compute divergence of tau field.

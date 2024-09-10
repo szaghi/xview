@@ -50,6 +50,7 @@ contains
    logical,                intent(in), optional :: compute_qfactor   !< Compute qfactor field.
    logical,                intent(in), optional :: compute_helicity  !< Compute helicity field.
    logical,                intent(in), optional :: compute_vorticity !< Compute vorticity field.
+   logical,                intent(in), optional :: compute_grad_p    !< Compute gradient pressure.
    logical,                intent(in), optional :: compute_div2LT    !< Compute double divergence of Lighthill tensor.
    logical,                intent(in), optional :: compute_k_ratio   !< Compute kinetic energy ratio.
    logical,                intent(in), optional :: compute_yplus     !< Compute y+ field.
@@ -78,6 +79,7 @@ contains
                                         compute_helicity=compute_helicity,   &
                                         compute_vorticity=compute_vorticity, &
                                         compute_div2LT=compute_div2LT,       &
+                                        compute_grad_p=compute_grad_p,       &
                                         compute_k_ratio=compute_k_ratio,     &
                                         compute_yplus=compute_yplus,         &
                                         compute_tau=compute_tau,             &

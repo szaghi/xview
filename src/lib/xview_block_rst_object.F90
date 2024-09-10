@@ -30,6 +30,7 @@ type :: block_rst_object
    real(R8P),    allocatable :: qfactor(:,:,:)                              !< Variable to identify vortices (q factor).
    real(R8P),    allocatable :: helicity(:,:,:)                             !< Helicity.
    type(vector), allocatable :: vorticity(:,:,:)                            !< Vorticity.
+   type(vector), allocatable :: grad_p(:,:,:)                               !< Pressure Gradient.
    real(R8P),    allocatable :: div2LT(:,:,:)                               !< Double divergence of Lighthill tensor.
    real(R8P),    allocatable :: k_ratio(:,:,:)                              !< Kinetic energies ratio.
    real(R8P),    allocatable :: yplus(:,:,:)                                !< Estimation of y+.
@@ -49,6 +50,7 @@ type :: block_rst_object
    logical                   :: has_qfactor=.false.                         !< Solution has qfactor field.
    logical                   :: has_helicity=.false.                        !< Solution has helicity field.
    logical                   :: has_vorticity=.false.                       !< Solution has vorticity field.
+   logical                   :: has_grad_p=.false.                          !< Solution has pressure gradient field.
    logical                   :: has_div2LT=.false.                          !< Solution has double divergence of Lighthill tensor.
    logical                   :: has_k_ratio=.false.                         !< Solution has kinetic energy ratio.
    logical                   :: has_yplus=.false.                           !< Solution has y+ field.
@@ -66,6 +68,7 @@ type :: block_rst_object
       procedure, pass(self) :: compute_loads                !< Compute loads (forces and torques) on patches.
       procedure, pass(self) :: compute_tau                  !< Compute Tau wall and its divergence on patches.
       procedure, pass(self) :: compute_vorticity            !< Compute vorticity related varibles.
+      procedure, pass(self) :: compute_grad_p               !< Compute pressure gradient.
       procedure, pass(self) :: compute_yplus                !< Compute yplus on patches.
       procedure, pass(self) :: has_level_set                !< Return true if block has level set functions.
       procedure, pass(self) :: has_turb_kinetic_energy      !< Return true if block has turbulent kinetic energy field.
@@ -102,6 +105,7 @@ contains
    if (allocated(self%qfactor))                              deallocate(self%qfactor)
    if (allocated(self%helicity))                             deallocate(self%helicity)
    if (allocated(self%vorticity))                            deallocate(self%vorticity)
+   if (allocated(self%grad_p))                               deallocate(self%grad_p)
    if (allocated(self%div2LT))                               deallocate(self%div2LT)
    if (allocated(self%k_ratio))                              deallocate(self%k_ratio)
    if (allocated(self%yplus))                                deallocate(self%yplus)
@@ -113,21 +117,22 @@ contains
    if (allocated(self%torque_hydrostatic))                   deallocate(self%torque_hydrostatic)
    if (allocated(self%torque_pressure))                      deallocate(self%torque_pressure)
    if (allocated(self%torque_viscous))                       deallocate(self%torque_viscous)
-   self%is_level_set=.false.
-   self%is_zeroeq=.false.
-   self%is_oneeq=.false.
-   self%is_twoeq=.false.
-   self%has_lambda2=.false.
-   self%has_qfactor=.false.
-   self%has_helicity=.false.
-   self%has_vorticity=.false.
-   self%has_yplus=.false.
-   self%has_tau=.false.
-   self%has_div_tau=.false.
-   self%has_div2LT=.false.
-   self%has_k_ratio=.false.
-   self%has_loads=.false.
-   self%is_loaded = .false.
+   self%is_level_set  =.false.
+   self%is_zeroeq     =.false.
+   self%is_oneeq      =.false.
+   self%is_twoeq      =.false.
+   self%has_lambda2   =.false.
+   self%has_qfactor   =.false.
+   self%has_helicity  =.false.
+   self%has_vorticity =.false.
+   self%has_yplus     =.false.
+   self%has_tau       =.false.
+   self%has_div_tau   =.false.
+   self%has_div2LT    =.false.
+   self%has_grad_p    =.false.
+   self%has_k_ratio   =.false.
+   self%has_loads     =.false.
+   self%is_loaded     = .false.
    endsubroutine destroy
 
    elemental subroutine alloc(self)
@@ -155,6 +160,7 @@ contains
    if (self%has_helicity ) allocate(self%helicity( 1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
    if (self%has_vorticity) allocate(self%vorticity(1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
    if (self%has_div2LT   ) allocate(self%div2LT(   1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
+   if (self%has_grad_p   ) allocate(self%grad_p(   1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
    if (self%has_k_ratio  ) allocate(self%k_ratio(  1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
    if (self%has_yplus    ) allocate(self%yplus(    0-gc(1):Ni+gc(2), 0-gc(3):Nj+gc(4), 0-gc(5):Nk+gc(6)))
    if (self%has_tau      ) allocate(self%tau(      0-gc(1):Ni+gc(2), 0-gc(3):Nj+gc(4), 0-gc(5):Nk+gc(6)))
@@ -181,7 +187,8 @@ contains
    real(R8P),               intent(in), optional :: zfs   !< Z quote of free surface.
 
    if ((self%has_lambda2).or.(self%has_qfactor).or.(self%has_helicity).or.(self%has_vorticity)) call self%compute_vorticity(grd)
-   if (self%has_div2LT) call self%compute_div2LT(grd)
+   if (self%has_div2LT)  call self%compute_div2LT(grd)
+   if (self%has_grad_p)  call self%compute_grad_p(grd)
    if (self%has_k_ratio) call self%compute_kinetic_energy_ratio(grd)
    if (present(patch)) then
       if (self%has_yplus)                   call self%compute_yplus(grd=grd, icc=icc, patch=patch, RE=RE)
@@ -224,6 +231,32 @@ contains
    enddo
    endassociate
    endsubroutine compute_div2LT
+
+   subroutine compute_grad_p(self, grd)
+      !< Compute pressure gradient.
+      class(block_rst_object), intent(inout) :: self          !< Block data.
+      type(block_grd_object),  intent(in)    :: grd           !< Block grd data.
+      real(R8P), allocatable                 :: G(:,:,:,:,:)  !< Gradient.
+      integer(I4P)                           :: i,j,k         !< Counter.
+   
+      associate(Ni=>self%Ni, Nj=>self%Nj, Nk=>self%Nk, gc=>self%gc,                 &
+                NFiS=>grd%NFiS, NFjS=>grd%NFjS, NFkS=>grd%NFkS, volume=>grd%volume, &
+                pressure=>self%pressure,grad_p=>self%grad_p)
+      allocate(G(1:3,1:3,0-gc(1):Ni+gc(2),0-gc(3):Nj+gc(4),0-gc(5):Nk+gc(6)))
+      allocate(divLT(    1-gc(1):Ni+gc(2),1-gc(3):Nj+gc(4),1-gc(5):Nk+gc(6)))
+   
+      call grd%compute_gradient(var=pressure, gv=G, tensor=.true.)
+      do k=0,Nk+1
+         do j=0,Nj+1
+            do i=0,Ni+1
+               grad_p(i,j,k)%x = G(1,1,i,j,k)+G(1,2,i,j,k)+G(1,3,i,j,k) ! dvar%x.var%x/dx + dvar%x.var%y/dy + dvar%x.var%z/dz
+               grad_p(i,j,k)%y = G(2,1,i,j,k)+G(2,2,i,j,k)+G(2,3,i,j,k) ! dvar%y.var%x/dx + dvar%y.var%y/dy + dvar%y.var%z/dz
+               grad_p(i,j,k)%z = G(3,1,i,j,k)+G(3,2,i,j,k)+G(3,3,i,j,k) ! dvar%z.var%x/dx + dvar%z.var%y/dy + dvar%z.var%z/dz
+            enddo
+         enddo
+      enddo
+      endassociate
+      endsubroutine compute_grad_p   
 
    subroutine compute_kinetic_energy_ratio(self, grd, vel0)
    !< Compute ratio of modelled kinetic energy over total kinetic energy.

@@ -184,6 +184,10 @@ contains
          error=output%xml_writer%write_dataarray(data_name='vorticity', x=sol%vorticity(i1:i2,j1:j2,k1:k2)%x, &
                                                                         y=sol%vorticity(i1:i2,j1:j2,k1:k2)%y, &
                                                                         z=sol%vorticity(i1:i2,j1:j2,k1:k2)%z)
+         if (allocated(sol%grad_p)) &
+         error=output%xml_writer%write_dataarray(data_name='gradp', x=sol%grad_p(i1:i2,j1:j2,k1:k2)%x, &
+                                                                    y=sol%grad_p(i1:i2,j1:j2,k1:k2)%y, &
+                                                                    z=sol%grad_p(i1:i2,j1:j2,k1:k2)%z)
          if (allocated(sol%force_hydrostatic).and.present(patch)) &
          error=output%xml_writer%write_dataarray(data_name='force_hydrostatic',x=sol%force_hydrostatic(i1:i2,j1:j2,k1:k2)%x, &
                                                                                y=sol%force_hydrostatic(i1:i2,j1:j2,k1:k2)%y, &

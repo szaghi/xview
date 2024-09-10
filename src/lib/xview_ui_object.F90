@@ -54,6 +54,7 @@ type :: ui_object
    logical                      :: compute_qfactor=.false.  !< Compute qfactor field.
    logical                      :: compute_helicity=.false. !< Compute helicity field.
    logical                      :: compute_vorticity=.false.!< Compute vorticity field.
+   logical                      :: compute_grad_p=.false.   !< Compute gradient pressure.
    logical                      :: compute_div2LT=.false.   !< Compute double divergence of Lighthill tensor.
    logical                      :: compute_k_ratio=.false.  !< Compute kinetic energy ratio.
    logical                      :: compute_yplus=.false.    !< Compute y+ field.
@@ -158,6 +159,7 @@ contains
       call self%cli%get(group='postprocess',switch='--qfactor',  val=self%compute_qfactor,   error=error) ; if (error/=0) stop
       call self%cli%get(group='postprocess',switch='--helicity', val=self%compute_helicity,  error=error) ; if (error/=0) stop
       call self%cli%get(group='postprocess',switch='--vorticity',val=self%compute_vorticity, error=error) ; if (error/=0) stop
+      call self%cli%get(group='postprocess',switch='--gradp',    val=self%compute_grad_p,    error=error) ; if (error/=0) stop
       call self%cli%get(group='postprocess',switch='--div2LT',   val=self%compute_div2LT,    error=error) ; if (error/=0) stop
       call self%cli%get(group='postprocess',switch='--k-ratio',  val=self%compute_k_ratio,   error=error) ; if (error/=0) stop
       call self%cli%get(group='postprocess',switch='--yplus',    val=self%compute_yplus,     error=error) ; if (error/=0) stop
@@ -472,6 +474,15 @@ contains
                      act='store_true',                                           &
                      def='.false.',                                              &
                      group='postprocess',                                        &
+                     error=error)
+   if (error/=0) stop
+
+   call self%cli%add(switch='--gradp',                 &
+                     help='compute gradient pressure', &
+                     required=.false.,                 &
+                     act='store_true',                 &
+                     def='.false.',                    &
+                     group='postprocess',              &
                      error=error)
    if (error/=0) stop
 
