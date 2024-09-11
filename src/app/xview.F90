@@ -256,6 +256,7 @@ contains
                                                         compute_qfactor=ui%compute_qfactor,     &
                                                         compute_helicity=ui%compute_helicity,   &
                                                         compute_vorticity=ui%compute_vorticity, &
+                                                        compute_grad_p=ui%compute_grad_p,       &
                                                         compute_div2LT=ui%compute_div2LT,       &
                                                         compute_k_ratio=ui%compute_k_ratio,     &
                                                         compute_yplus=ui%compute_yplus,         &
@@ -354,6 +355,7 @@ contains
                                     compute_qfactor=ui%compute_qfactor,     &
                                     compute_helicity=ui%compute_helicity,   &
                                     compute_vorticity=ui%compute_vorticity, &
+                                    compute_grad_p=ui%compute_grad_p,       &
                                     compute_div2LT=ui%compute_div2LT,       &
                                     compute_k_ratio=ui%compute_k_ratio,     &
                                     compute_yplus=ui%compute_yplus,         &
