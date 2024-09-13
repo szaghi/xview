@@ -50,8 +50,8 @@ type :: block_rst_object
    logical                   :: has_qfactor=.false.                         !< Solution has qfactor field.
    logical                   :: has_helicity=.false.                        !< Solution has helicity field.
    logical                   :: has_vorticity=.false.                       !< Solution has vorticity field.
-   logical                   :: has_grad_p=.false.                          !< Solution has pressure gradient field.
    logical                   :: has_div2LT=.false.                          !< Solution has double divergence of Lighthill tensor.
+   logical                   :: has_grad_p=.false.                          !< Solution has pressure gradient field.
    logical                   :: has_k_ratio=.false.                         !< Solution has kinetic energy ratio.
    logical                   :: has_yplus=.false.                           !< Solution has y+ field.
    logical                   :: has_tau=.false.                             !< Solution has tau field.
@@ -233,30 +233,12 @@ contains
    endsubroutine compute_div2LT
 
    subroutine compute_grad_p(self, grd)
-      !< Compute pressure gradient.
-      class(block_rst_object), intent(inout) :: self          !< Block data.
-      type(block_grd_object),  intent(in)    :: grd           !< Block grd data.
-      real(R8P), allocatable                 :: G(:,:,:,:,:)  !< Gradient.
-      integer(I4P)                           :: i,j,k         !< Counter.
-   
-      associate(Ni=>self%Ni, Nj=>self%Nj, Nk=>self%Nk, gc=>self%gc,                 &
-                NFiS=>grd%NFiS, NFjS=>grd%NFjS, NFkS=>grd%NFkS, volume=>grd%volume, &
-                pressure=>self%pressure,grad_p=>self%grad_p)
-      allocate(G(1:3,1:3,0-gc(1):Ni+gc(2),0-gc(3):Nj+gc(4),0-gc(5):Nk+gc(6)))
-      allocate(divLT(    1-gc(1):Ni+gc(2),1-gc(3):Nj+gc(4),1-gc(5):Nk+gc(6)))
-   
-      call grd%compute_gradient(var=pressure, gv=G, tensor=.true.)
-      do k=0,Nk+1
-         do j=0,Nj+1
-            do i=0,Ni+1
-               grad_p(i,j,k)%x = G(1,1,i,j,k)+G(1,2,i,j,k)+G(1,3,i,j,k) ! dvar%x.var%x/dx + dvar%x.var%y/dy + dvar%x.var%z/dz
-               grad_p(i,j,k)%y = G(2,1,i,j,k)+G(2,2,i,j,k)+G(2,3,i,j,k) ! dvar%y.var%x/dx + dvar%y.var%y/dy + dvar%y.var%z/dz
-               grad_p(i,j,k)%z = G(3,1,i,j,k)+G(3,2,i,j,k)+G(3,3,i,j,k) ! dvar%z.var%x/dx + dvar%z.var%y/dy + dvar%z.var%z/dz
-            enddo
-         enddo
-      enddo
-      endassociate
-      endsubroutine compute_grad_p   
+   !< Compute pressure gradient.
+   class(block_rst_object), intent(inout) :: self !< Block data.
+   type(block_grd_object),  intent(in)    :: grd  !< Block grd data.
+
+   call grd%compute_gradient(var=self%pressure, gv=self%grad_p)
+   endsubroutine compute_grad_p
 
    subroutine compute_kinetic_energy_ratio(self, grd, vel0)
    !< Compute ratio of modelled kinetic energy over total kinetic energy.
@@ -860,8 +842,9 @@ contains
    has_viscosity = allocated(self%viscosity)
    endfunction has_viscosity
 
-   subroutine init(self, Ni, Nj, Nk, gc, is_level_set, is_zeroeq, is_oneeq, is_twoeq,               &
-                   has_lambda2, has_qfactor, has_helicity, has_vorticity, has_div2LT, has_k_ratio,  &
+   subroutine init(self, Ni, Nj, Nk, gc, is_level_set, is_zeroeq, is_oneeq, is_twoeq,             &
+                   has_lambda2, has_qfactor, has_helicity, has_vorticity, has_div2LT, has_grad_p, &
+                   has_k_ratio,                                                                   &
                    has_yplus, has_tau, has_div_tau, has_loads)
    !< Initialize block.
    class(block_rst_object), intent(inout)        :: self          !< Block data.
@@ -878,6 +861,7 @@ contains
    logical,                 intent(in), optional :: has_helicity  !< Solution has helicity field.
    logical,                 intent(in), optional :: has_vorticity !< Solution has vorticity field.
    logical,                 intent(in), optional :: has_div2LT    !< Solution has double divergence of Lighthill tensor.
+   logical,                 intent(in), optional :: has_grad_p    !< Solution has pressure gradient.
    logical,                 intent(in), optional :: has_k_ratio   !< Solution has kinetic energy ratio.
    logical,                 intent(in), optional :: has_yplus     !< Solution has y+ field.
    logical,                 intent(in), optional :: has_tau       !< Solution has tau field.
@@ -898,6 +882,7 @@ contains
    if (present(has_helicity  )) self%has_helicity  = has_helicity
    if (present(has_vorticity )) self%has_vorticity = has_vorticity
    if (present(has_div2LT    )) self%has_div2LT    = has_div2LT
+   if (present(has_grad_p    )) self%has_grad_p    = has_grad_p
    if (present(has_k_ratio   )) self%has_k_ratio   = has_k_ratio
    if (present(has_yplus     )) self%has_yplus     = has_yplus
    if (present(has_tau       )) self%has_tau       = has_tau
@@ -973,8 +958,9 @@ contains
       endsubroutine interpolate_R8P
    endsubroutine interpolate_at_nodes
 
-   subroutine load_dimensions(self, file_unit, is_level_set, is_zeroeq, is_oneeq, is_twoeq,                                     &
-                              compute_lambda2,compute_qfactor,compute_helicity,compute_vorticity,compute_div2LT,compute_k_ratio,&
+   subroutine load_dimensions(self, file_unit, is_level_set, is_zeroeq, is_oneeq, is_twoeq,                     &
+                              compute_lambda2,compute_qfactor,compute_helicity,compute_vorticity,compute_div2LT,&
+                              compute_grad_p,compute_k_ratio,                                                   &
                               compute_yplus,compute_tau,compute_div_tau,compute_loads)
    !< Load block dimensions from file.
    !<
@@ -990,6 +976,7 @@ contains
    logical,                 intent(in), optional :: compute_helicity  !< Compute helicity field.
    logical,                 intent(in), optional :: compute_vorticity !< Compute vorticity field.
    logical,                 intent(in), optional :: compute_div2LT    !< Compute double divergence of Lighthill tensor.
+   logical,                 intent(in), optional :: compute_grad_p    !< Compute gradient pressure.
    logical,                 intent(in), optional :: compute_k_ratio   !< Compute kinetic energy ratio.
    logical,                 intent(in), optional :: compute_yplus     !< Compute y+ field.
    logical,                 intent(in), optional :: compute_tau       !< Compute tau field.
@@ -1007,13 +994,15 @@ contains
       call self%init(Ni=Ni,Nj=Nj,Nk=Nk,gc=gc,                                                               &
                      is_level_set=is_level_set,is_zeroeq=is_zeroeq,is_oneeq=is_oneeq,is_twoeq=is_twoeq,     &
                      has_lambda2=compute_lambda2,has_qfactor=compute_qfactor,has_helicity=compute_helicity, &
-                     has_vorticity=compute_vorticity,has_div2LT=compute_div2LT,has_k_ratio=compute_k_ratio, &
+                     has_vorticity=compute_vorticity,has_div2LT=compute_div2LT,has_grad_p=compute_grad_p,   &
+                     has_k_ratio=compute_k_ratio,                                                           &
                      has_yplus=compute_yplus,has_tau=compute_tau,has_div_tau=compute_div_tau,has_loads=compute_loads)
    else
       call self%init(Ni=Ni,Nj=Nj,Nk=Nk,                                                                     &
                      is_level_set=is_level_set,is_zeroeq=is_zeroeq,is_oneeq=is_oneeq,is_twoeq=is_twoeq,     &
                      has_lambda2=compute_lambda2,has_qfactor=compute_qfactor,has_helicity=compute_helicity, &
-                     has_vorticity=compute_vorticity,has_div2LT=compute_div2LT,has_k_ratio=compute_k_ratio, &
+                     has_vorticity=compute_vorticity,has_div2LT=compute_div2LT,has_grad_p=compute_grad_p,   &
+                     has_k_ratio=compute_k_ratio,                                                           &
                      has_yplus=compute_yplus,has_tau=compute_tau,has_div_tau=compute_div_tau,has_loads=compute_loads)
    endif
    endsubroutine load_dimensions

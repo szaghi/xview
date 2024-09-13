@@ -70,8 +70,7 @@ contains
    endif
    endsubroutine finalize
 
-   subroutine initialize(self, path, file_name, is_binary, is_cell_centered, is_icc, is_sol, is_level_set, &
-                         is_zeroeq, is_oneeq, is_twoeq)
+   subroutine initialize(self, path, file_name, is_binary, is_cell_centered, file_icc, file_sol)
    !< Initialize file.
    class(file_tec_object), intent(inout) :: self             !< File data.
    character(*),           intent(in)    :: path             !< Output path.
@@ -103,19 +102,19 @@ contains
       self%tecvarname = self%tecvarname//' '//trim(vd)//'v'//trim(vd)
       self%tecvarname = self%tecvarname//' '//trim(vd)//'w'//trim(vd)
       self%tecvarname = self%tecvarname//' '//trim(vd)//'p'//trim(vd)
-      if (is_level_set) then
+      if (file_sol%blocks(1)%is_level_set) then
          self%nvar = self%nvar + 2 ! f and f0 must be saved
          self%tecvarname = self%tecvarname//' '//trim(vd)//'f'//trim(vd)
          self%tecvarname = self%tecvarname//' '//trim(vd)//'f0'//trim(vd)
       endif
-      if (is_zeroeq) then
+      if (file_sol%blocks(1)%is_zeroeq) then
          self%nvar = self%nvar + 1 ! visc must be saved
          self%tecvarname = self%tecvarname//' '//trim(vd)//'visc'//trim(vd)
-      elseif (is_oneeq) then
+      elseif (file_sol%blocks(1)%is_oneeq) then
          self%nvar = self%nvar + 2 ! visc and vitl must be saved
          self%tecvarname = self%tecvarname//' '//trim(vd)//'visc'//trim(vd)
          self%tecvarname = self%tecvarname//' '//trim(vd)//'vitl'//trim(vd)
-      elseif (is_twoeq) then
+      elseif (file_sol%blocks(1)%is_twoeq) then
          self%nvar = self%nvar + 3 ! visc, ken and eps must be saved
          self%tecvarname = self%tecvarname//' '//trim(vd)//'visc'//trim(vd)
          self%tecvarname = self%tecvarname//' '//trim(vd)//'ken'//trim(vd)

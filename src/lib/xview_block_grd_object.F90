@@ -49,7 +49,9 @@ type :: block_grd_object
       ! public methods
       procedure, pass(self) :: alloc                    !< Allocate dynamic memory.
       procedure, pass(self) :: compute_divergence       !< Compute the divergence (scalar) of a vector.
-      procedure, pass(self) :: compute_gradient         !< Compute the gradient (tensor) of a vector.
+      generic               :: compute_gradient =>     &
+                               compute_gradient_scalar,&
+                               compute_gradient_vector  !< Compute the gradient of a scalar or vector.
       procedure, pass(self) :: compute_laplacian        !< Compute the laplacian (vector) of a vector.
       procedure, pass(self) :: compute_laplacian_tensor !< Compute the laplacian (tensor) of a vector.
       procedure, pass(self) :: compute_metrics          !< Compute metrics.
@@ -61,7 +63,15 @@ type :: block_grd_object
       procedure, pass(self) :: save_dimensions          !< Save block dimensions into file.
       procedure, pass(self) :: save_nodes               !< Save block nodes into file.
       procedure, pass(self) :: traslate                 !< Traslate block nodes by a given traslation vector.
+      ! private methods
+      procedure, pass(self) :: compute_gradient_scalar  !< Compute the gradient (vector) of a scalar.
+      procedure, pass(self) :: compute_gradient_vector  !< Compute the gradient (tensor) of a vector.
 endtype block_grd_object
+
+interface fluxes
+   module procedure fluxes_scalar !< Return the fluxes of a scalar.
+   module procedure fluxes_vector !< Return the fluxes of a vector.
+endinterface fluxes
 
 contains
    ! public methods
@@ -128,7 +138,94 @@ contains
    endassociate
    endsubroutine compute_divergence
 
-   subroutine compute_gradient(self, var, gv, tensor)
+   subroutine compute_gradient_scalar(self, var, gv)
+   !< Compute the gradient (vector) of a scalar by finite volume approach.
+   !< @Note: the gradient is computed into the whole block.
+   !< gv (output vector) is defined as
+   !< | dvar/dx | dvar/dy | dvar/dz |
+   class(block_grd_object),   intent(in)    :: self               !< Block data.
+   real(R8P),                 intent(inout) :: var(1-self%gc(1):, &
+                                                   1-self%gc(3):, &
+                                                   1-self%gc(5):) !< Input vector.
+   type(vector), allocatable, intent(out)   :: gv(:,:,:)          !< Vector gradient.
+   real(R8P)                                :: G(3,3)             !< Tensor gradient.
+   real(R8P), allocatable                   :: Fi(:,:,:,:,:)      !< Fluxes i direction.
+   real(R8P), allocatable                   :: Fj(:,:,:,:,:)      !< Fluxes j direction.
+   real(R8P), allocatable                   :: Fk(:,:,:,:,:)      !< Fluxes k direction.
+   real(R8P)                                :: vm                 !< Dummy variables.
+   integer(I4P)                             :: i,j,k              !< Counter.
+
+   associate(Ni=>self%Ni, Nj=>self%Nj, Nk=>self%Nk, gc=>self%gc, &
+             NFiS=>self%NFiS, NFjS=>self%NFjS, NFkS=>self%NFkS, volume=>self%volume)
+   allocate(Fi(1:3,1:3,0-gc(1):Ni+gc(2),0-gc(3):Nj+gc(4),0-gc(5):Nk+gc(6)))
+   allocate(Fj(1:3,1:3,0-gc(1):Ni+gc(2),0-gc(3):Nj+gc(4),0-gc(5):Nk+gc(6)))
+   allocate(Fk(1:3,1:3,0-gc(1):Ni+gc(2),0-gc(3):Nj+gc(4),0-gc(5):Nk+gc(6)))
+   allocate(gv(        0-gc(1):Ni+gc(2),0-gc(3):Nj+gc(4),0-gc(5):Nk+gc(6)))
+   Fi = 0._R8P
+   Fj = 0._R8P
+   Fk = 0._R8P
+   ! extrapolate var from inner cells to ghost cells
+   do k=1,Nk
+      do j=1,Nj
+         var(1- gc(1),j,k) = 2._R8P*var(0,   j,k)-var(1, j,k)
+         var(Ni+gc(2),j,k) = 2._R8P*var(Ni+1,j,k)-var(Ni,j,k)
+      enddo
+   enddo
+   do k=1,Nk
+      do i=0,Ni+1
+         var(i,1- gc(3),k) = 2._R8P*var(i,0,   k)-var(i,1, k)
+         var(i,Nj+gc(4),k) = 2._R8P*var(i,Nj+1,k)-var(i,Nj,k)
+      enddo
+   enddo
+   do j=0,Nj+1
+      do i=0,Ni+1
+         var(i,j,1- gc(5)) = 2._R8P*var(i,j,0   )-var(i,j,1 )
+         var(i,j,Nk+gc(6)) = 2._R8P*var(i,j,Nk+1)-var(i,j,Nk)
+      enddo
+   enddo
+   ! compute fluxes
+   do k=0,Nk+1
+      do j=0,Nj+1
+         do i=-1,Ni+1
+            vm = 0.5_R8P*(var(i,j,k)+var(i+1,j,k))
+            Fi(:,:,i,j,k) = fluxes(NFS=NFiS(i,j,k), var=vm)
+         enddo
+      enddo
+   enddo
+   do k=0,Nk+1
+      do j=-1,Nj+1
+         do i=0,Ni+1
+            vm = 0.5_R8P*(var(i,j,k)+var(i,j+1,k))
+            Fj(:,:,i,j,k) = fluxes(NFS=NFjS(i,j,k), var=vm)
+         enddo
+      enddo
+   enddo
+   do k=-1,Nk+1
+      do j=0,Nj+1
+         do i=0,Ni+1
+            vm = 0.5_R8P*(var(i,j,k)+var(i,j,k+1))
+            Fk(:,:,i,j,k) = fluxes(NFS=NFkS(i,j,k), var=vm)
+         enddo
+      enddo
+   enddo
+   ! compute gradient
+   do k=0,Nk+1
+      do j=0,Nj+1
+         do i=0,Ni+1
+            G = gradient_cell(Fi=Fi(:,:,i-1:i,j-1:j,k-1:k), &
+                              Fj=Fj(:,:,i-1:i,j-1:j,k-1:k), &
+                              Fk=Fk(:,:,i-1:i,j-1:j,k-1:k), &
+                              volume=volume(i,j,k))
+            gv(i,j,k)%x = G(1,1)
+            gv(i,j,k)%y = G(2,2)
+            gv(i,j,k)%z = G(3,3)
+         enddo
+      enddo
+   enddo
+   endassociate
+   endsubroutine compute_gradient_scalar
+
+   subroutine compute_gradient_vector(self, var, gv, tensor)
    !< Compute the gradient (tensor) of a vector (or diadic-tensor-like) by finite volume approach.
    !< @Note: the gradient is computed into the whole block.
    !< gv (output tensor) is defined as a 3x3 matrix:
@@ -212,7 +309,7 @@ contains
       enddo
    enddo
    endassociate
-   endsubroutine compute_gradient
+   endsubroutine compute_gradient_vector
 
    subroutine compute_laplacian(self, var, delta, tensor)
    !< Compute the laplacian (vector) of a vector (or diadic-tensor-like) by finite volume approach.
@@ -985,7 +1082,24 @@ contains
    enddo
    endfunction gradient_cell
 
-   function fluxes(NFS, var, tensor) result(F)
+   function fluxes_scalar(NFS, var) result(F)
+   !< Return the fluxes of a scalar.
+   type(vector), intent(in) :: NFS    !< Cell metrics.
+   real(R8P),    intent(in) :: var    !< Input variable.
+   real(R8P)                :: F(3,3) !< Variable fluxes.
+
+   F(1,1) = var*NFS%x
+   F(1,2) = var*NFS%y
+   F(1,3) = var*NFS%z
+   F(2,1) = var*NFS%x
+   F(2,2) = var*NFS%y
+   F(2,3) = var*NFS%z
+   F(3,1) = var*NFS%x
+   F(3,2) = var*NFS%y
+   F(3,3) = var*NFS%z
+   endfunction fluxes_scalar
+
+   function fluxes_vector(NFS, var, tensor) result(F)
    !< Return the fluxes of a vector (or diadic tensor).
    type(vector), intent(in)           :: NFS    !< Cell metrics.
    type(vector), intent(in)           :: var    !< Input variable.
@@ -1013,5 +1127,5 @@ contains
       F(3,2) = var%z*NFS%y
       F(3,3) = var%z*NFS%z
    endif
-   endfunction fluxes
+   endfunction fluxes_vector
 endmodule xview_block_grd_object

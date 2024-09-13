@@ -48,7 +48,7 @@ contains
 
    subroutine load_solution(self,file_unit,is_cell_centered,patch,RE,rFR2,zfs,is_level_set,is_zeroeq,is_oneeq,is_twoeq, &
                             compute_lambda2,compute_qfactor,compute_helicity,compute_vorticity,                         &
-                            compute_div2LT,compute_k_ratio,compute_yplus,compute_tau,compute_div_tau,compute_loads)
+                            compute_div2LT,compute_grad_p,compute_k_ratio,compute_yplus,compute_tau,compute_div_tau,compute_loads)
    !< Load subzone solution from file.
    class(block_esz_object), intent(inout)        :: self              !< Block data.
    integer(I4P),            intent(in)           :: file_unit         !< Logical file unit.
@@ -67,6 +67,7 @@ contains
    logical,                 intent(in), optional :: compute_vorticity !< Compute vorticity field.
    logical,                 intent(in), optional :: compute_div2LT    !< Compute double divergence of Lighthill tensor.
    logical,                 intent(in), optional :: compute_grad_p    !< Compute pressure gradient.
+   logical,                 intent(in), optional :: compute_k_ratio   !< Compute kinetic energy ratio.
    logical,                 intent(in), optional :: compute_yplus     !< Compute y+ field.
    logical,                 intent(in), optional :: compute_tau       !< Compute tau field.
    logical,                 intent(in), optional :: compute_div_tau   !< Compute divergence of tau field.
@@ -111,7 +112,8 @@ contains
       call sol%init(Ni=Ni,Nj=Nj,Nk=Nk,                                                                     &
                     is_level_set=is_level_set,is_zeroeq=is_zeroeq,is_oneeq=is_oneeq,is_twoeq=is_twoeq,     &
                     has_lambda2=compute_lambda2,has_qfactor=compute_qfactor,has_helicity=compute_helicity, &
-                    has_vorticity=compute_vorticity,has_div2LT=compute_div2LT,has_k_ratio=compute_k_ratio, &
+                    has_vorticity=compute_vorticity,has_div2LT=compute_div2LT,has_grad_p=compute_grad_p,   &
+                    has_k_ratio=compute_k_ratio,                                                           &
                     has_yplus=compute_yplus,has_tau=compute_tau,has_div_tau=compute_div_tau,has_loads=compute_loads)
       read(file_unit)(((sol%momentum(i,j,k)%x,i=i1,i2),j=j1,j2),k=k1,k2)
       read(file_unit)(((sol%momentum(i,j,k)%y,i=i1,i2),j=j1,j2),k=k1,k2)

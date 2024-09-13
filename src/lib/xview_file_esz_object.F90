@@ -32,7 +32,8 @@ contains
 
    subroutine load_file(self,filename,is_cell_centered,patch,RE,rFR2,zfs,is_level_set,is_zeroeq,is_oneeq,is_twoeq, &
                         compute_metrics,compute_lambda2,compute_qfactor,compute_helicity,compute_vorticity,        &
-                        compute_div2LT,compute_k_ratio,compute_yplus,compute_tau,compute_div_tau,compute_loads,verbose)
+                        compute_div2LT,compute_grad_p,compute_k_ratio,compute_yplus,compute_tau,compute_div_tau,   &
+                        compute_loads,verbose)
    !< Load file.
    class(file_esz_object), intent(inout)        :: self              !< File data.
    character(*),           intent(in)           :: filename          !< File name of geo file.
