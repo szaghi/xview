@@ -49,6 +49,7 @@ type :: ui_object
    logical                      :: is_patch=.false.         !< Extract patch instead of whole volume.
    integer(I4P)                 :: patch                    !< Patch boundary conditions.
    logical                      :: is_extsubzone=.false.    !< Input files contain extracted subzones instead regular files.
+   logical                      :: compute_aux=.false.      !< Compute many auxiliary varibales.
    logical                      :: compute_metrics=.false.  !< Compute metrics.
    logical                      :: compute_lambda2=.false.  !< Compute lamda2 field.
    logical                      :: compute_qfactor=.false.  !< Compute qfactor field.
@@ -150,25 +151,49 @@ contains
    call self%cli%get(switch='--no-turbulent-model', val=self%is_dns,              error=error) ; if (error/=0) stop
    call self%cli%get(switch='--turbulent-eq',       val=turbulent_eq,             error=error) ; if (error/=0) stop
    if (self%cli%run_command('postprocess')) then
-      call self%cli%get(group='postprocess',switch='--ascii',    val=self%is_ascii,          error=error) ; if (error/=0) stop
-      call self%cli%get(group='postprocess',switch='--tec',      val=is_tec,                 error=error) ; if (error/=0) stop
-      call self%cli%get(group='postprocess',switch='--vtk',      val=is_vtk,                 error=error) ; if (error/=0) stop
-      call self%cli%get(group='postprocess',switch='--cell',     val=self%is_cell_centered,  error=error) ; if (error/=0) stop
-      call self%cli%get(group='postprocess',switch='--metrics',  val=self%compute_metrics,   error=error) ; if (error/=0) stop
-      call self%cli%get(group='postprocess',switch='--lambda2',  val=self%compute_lambda2,   error=error) ; if (error/=0) stop
-      call self%cli%get(group='postprocess',switch='--qfactor',  val=self%compute_qfactor,   error=error) ; if (error/=0) stop
-      call self%cli%get(group='postprocess',switch='--helicity', val=self%compute_helicity,  error=error) ; if (error/=0) stop
-      call self%cli%get(group='postprocess',switch='--vorticity',val=self%compute_vorticity, error=error) ; if (error/=0) stop
-      call self%cli%get(group='postprocess',switch='--gradp',    val=self%compute_grad_p,    error=error) ; if (error/=0) stop
-      call self%cli%get(group='postprocess',switch='--div2LT',   val=self%compute_div2LT,    error=error) ; if (error/=0) stop
-      call self%cli%get(group='postprocess',switch='--k-ratio',  val=self%compute_k_ratio,   error=error) ; if (error/=0) stop
-      call self%cli%get(group='postprocess',switch='--yplus',    val=self%compute_yplus,     error=error) ; if (error/=0) stop
-      call self%cli%get(group='postprocess',switch='--tau',      val=self%compute_tau,       error=error) ; if (error/=0) stop
-      call self%cli%get(group='postprocess',switch='--div-tau',  val=self%compute_div_tau,   error=error) ; if (error/=0) stop
-      call self%cli%get(group='postprocess',switch='--loads',    val=self%compute_loads,     error=error) ; if (error/=0) stop
-      call self%cli%get(group='postprocess',switch='--patch',      val=self%patch,           error=error) ; if (error/=0) stop
-      call self%cli%get(group='postprocess',switch='--ext-subzone',val=self%is_extsubzone,   error=error) ; if (error/=0) stop
+      call self%cli%get(group='postprocess',switch='--ascii',      val=self%is_ascii,          error=error) ; if (error/=0) stop
+      call self%cli%get(group='postprocess',switch='--tec',        val=is_tec,                 error=error) ; if (error/=0) stop
+      call self%cli%get(group='postprocess',switch='--vtk',        val=is_vtk,                 error=error) ; if (error/=0) stop
+      call self%cli%get(group='postprocess',switch='--cell',       val=self%is_cell_centered,  error=error) ; if (error/=0) stop
+      call self%cli%get(group='postprocess',switch='--compute-aux',val=self%compute_aux,       error=error) ; if (error/=0) stop
+      call self%cli%get(group='postprocess',switch='--metrics',    val=self%compute_metrics,   error=error) ; if (error/=0) stop
+      call self%cli%get(group='postprocess',switch='--lambda2',    val=self%compute_lambda2,   error=error) ; if (error/=0) stop
+      call self%cli%get(group='postprocess',switch='--qfactor',    val=self%compute_qfactor,   error=error) ; if (error/=0) stop
+      call self%cli%get(group='postprocess',switch='--helicity',   val=self%compute_helicity,  error=error) ; if (error/=0) stop
+      call self%cli%get(group='postprocess',switch='--vorticity',  val=self%compute_vorticity, error=error) ; if (error/=0) stop
+      call self%cli%get(group='postprocess',switch='--gradp',      val=self%compute_grad_p,    error=error) ; if (error/=0) stop
+      call self%cli%get(group='postprocess',switch='--div2LT',     val=self%compute_div2LT,    error=error) ; if (error/=0) stop
+      call self%cli%get(group='postprocess',switch='--k-ratio',    val=self%compute_k_ratio,   error=error) ; if (error/=0) stop
+      call self%cli%get(group='postprocess',switch='--yplus',      val=self%compute_yplus,     error=error) ; if (error/=0) stop
+      call self%cli%get(group='postprocess',switch='--tau',        val=self%compute_tau,       error=error) ; if (error/=0) stop
+      call self%cli%get(group='postprocess',switch='--div-tau',    val=self%compute_div_tau,   error=error) ; if (error/=0) stop
+      call self%cli%get(group='postprocess',switch='--loads',      val=self%compute_loads,     error=error) ; if (error/=0) stop
+      call self%cli%get(group='postprocess',switch='--patch',      val=self%patch,             error=error) ; if (error/=0) stop
+      call self%cli%get(group='postprocess',switch='--ext-subzone',val=self%is_extsubzone,     error=error) ; if (error/=0) stop
       if (self%cli%is_passed(group='postprocess', switch='--patch')) self%is_patch=.true.
+      if (self%compute_lambda2  ) self%compute_metrics = .true.
+      if (self%compute_qfactor  ) self%compute_metrics = .true.
+      if (self%compute_helicity ) self%compute_metrics = .true.
+      if (self%compute_vorticity) self%compute_metrics = .true.
+      if (self%compute_grad_p   ) self%compute_metrics = .true.
+      if (self%compute_div2LT   ) self%compute_metrics = .true.
+      if (self%compute_k_ratio  ) self%compute_metrics = .true.
+      if (self%compute_yplus    ) self%compute_metrics = .true.
+      if (self%compute_tau      ) self%compute_metrics = .true.
+      if (self%compute_div_tau  ) self%compute_metrics = .true.
+      ! if (self%compute_aux) then
+         ! self%compute_metrics   = .true.
+         ! self%compute_lambda2   = .true.
+         ! self%compute_qfactor   = .true.
+         ! self%compute_helicity  = .true.
+         ! self%compute_vorticity = .true.
+         ! self%compute_grad_p    = .true.
+         ! self%compute_div2LT    = .true.
+         ! self%compute_k_ratio   = .true.
+         ! self%compute_yplus     = .true.
+         ! self%compute_tau       = .true.
+         ! self%compute_div_tau   = .true.
+      ! endif
    endif
    if (self%is_dns) then
       self%is_zeroeq = .false.
@@ -370,20 +395,21 @@ contains
                      error=error)
    if (error/=0) stop
 
-   call self%cli%add(switch='--compute-aux',                                  &
-                     help='compute auxiliary variables (metrics, forces...)', &
-                     required=.false.,                                        &
-                     act='store_true',                                        &
-                     def='.false.',                                           &
-                     error=error)
-   if (error/=0) stop
-
    ! commands
 
    ! postprocess
    call self%cli%add_group(help="usage: ",                                                           &
                            description="postprocess input files for ParaView/TecPlot visualization", &
                            group="postprocess")
+
+   call self%cli%add(switch='--compute-aux',                                  &
+                     help='compute auxiliary variables (metrics, forces...)', &
+                     required=.false.,                                        &
+                     act='store_true',                                        &
+                     def='.false.',                                           &
+                     group='postprocess',                                     &
+                     error=error)
+   if (error/=0) stop
 
    call self%cli%add(switch='--cell',                                            &
                      help='variables other than nodes coord. are cell centered', &
