@@ -613,6 +613,7 @@ contains
 
    associate(Ni=>grd%Ni,Nj=>grd%Nj,Nk=>grd%Nk,gc=>grd%gc, &
              momentum=>self%momentum,lambda2=>self%lambda2,qfactor=>self%qfactor,helicity=>self%helicity,vorticity=>self%vorticity)
+   ! print '(A)', 'compute vorticity'
    call grd%compute_gradient(var=momentum, gv=gv)
    if (self%has_helicity.or.self%has_vorticity) then
       ! compute vorticity vector
@@ -627,6 +628,7 @@ contains
       enddo
    endif
    if (self%has_helicity) then
+      ! print '(A)', 'compute helicity'
       ! compute helicity
       do k=0,Nk+1
          do j=0,Nj+1
@@ -637,6 +639,8 @@ contains
       enddo
    endif
    if (self%has_lambda2.or.self%has_qfactor) then
+      ! if (self%has_lambda2) print '(A)', 'compute lambda2'
+      ! if (self%has_qfactor) print '(A)', 'compute qfactor'
       do k=0,Nk+1
          do j=0,Nj+1
             do i=0,Ni+1
@@ -651,12 +655,14 @@ contains
                enddo
                SO = matmul(S,S) + matmul(O,O)
 
-               if (self%has_qfactor) qfactor(i,j,k) = 0.5_R8P*(dot_product(O(1,:),O(1,:)) + &
-                                                               dot_product(O(2,:),O(2,:)) + &
-                                                               dot_product(O(3,:),O(3,:)) - &
-                                                              (dot_product(S(1,:),S(1,:)) + &
-                                                               dot_product(S(2,:),S(2,:)) + &
-                                                               dot_product(S(3,:),S(3,:))))
+               if (self%has_qfactor) then
+                  qfactor(i,j,k) = 0.5_R8P*(dot_product(O(1,:),O(1,:)) + &
+                                            dot_product(O(2,:),O(2,:)) + &
+                                            dot_product(O(3,:),O(3,:)) - &
+                                           (dot_product(S(1,:),S(1,:)) + &
+                                            dot_product(S(2,:),S(2,:)) + &
+                                            dot_product(S(3,:),S(3,:))))
+               endif
 
                if (self%has_lambda2) then
                   ! coefficients of characterist polynomial: lamda^3 + c(2)*lamda^2 + c(1)*lamda + c(0) = 0
