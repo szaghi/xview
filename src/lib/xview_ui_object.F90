@@ -30,6 +30,7 @@ type :: ui_object
    character(MAX_CHAR_LENGTH)   :: filename_grd             !< File name of file grd.
    character(MAX_CHAR_LENGTH)   :: filename_icc             !< File name of file icc.
    character(MAX_CHAR_LENGTH)   :: filename_rst             !< File name of file sol.
+   character(MAX_CHAR_LENGTH), allocatable :: sname_rst(:)                !< Suffix of file name of file sol.
    character(MAX_CHAR_LENGTH)   :: opath                    !< Path to output files.
    character(MAX_CHAR_LENGTH)   :: basename_out             !< Base name of output files.
    character(2)                 :: grid_level               !< Grid level to be postprocessed.
@@ -49,6 +50,7 @@ type :: ui_object
    logical                      :: is_patch=.false.         !< Extract patch instead of whole volume.
    integer(I4P)                 :: patch                    !< Patch boundary conditions.
    logical                      :: is_extsubzone=.false.    !< Input files contain extracted subzones instead regular files.
+   logical                      :: is_aero_patch=.false.    !< Save extracted patches in aeroacustic format.
    logical                      :: compute_aux=.false.      !< Compute many auxiliary varibales.
    logical                      :: compute_metrics=.false.  !< Compute metrics.
    logical                      :: compute_lambda2=.false.  !< Compute lamda2 field.
@@ -131,25 +133,26 @@ contains
    call self%set_cli
    call self%cli%parse(error=error) ; if (error/=0) stop
 
-   call self%cli%get(switch='--verbose',            val=self%verbose,             error=error) ; if (error/=0) stop
-   call self%cli%get(switch='--ipath',              val=self%ipath,               error=error) ; if (error/=0) stop
-   call self%cli%get(switch='--procinput',          val=self%procinput_file_name, error=error) ; if (error/=0) stop
-   call self%cli%get(switch='--blocks-map',         val=self%blksmap_file_name,   error=error) ; if (error/=0) stop
-   call self%cli%get(switch='--myrank',             val=self%myrank,              error=error) ; if (error/=0) stop
-   call self%cli%get(switch='--mbpar',              val=self%mbpar_file_name,     error=error) ; if (error/=0) stop
-   call self%cli%get(switch='--grid-level',         val=self%grid_level,          error=error) ; if (error/=0) stop
-   call self%cli%get(switch='--glob',               val=self%do_glob,             error=error) ; if (error/=0) stop
-   call self%cli%get(switch='--grd',                val=self%filename_grd,        error=error) ; if (error/=0) stop
-   call self%cli%get(switch='--icc',                val=self%filename_icc,        error=error) ; if (error/=0) stop
-   call self%cli%get(switch='--rst',                val=self%filename_rst,        error=error) ; if (error/=0) stop
-   call self%cli%get(switch='--opath',              val=self%opath,               error=error) ; if (error/=0) stop
-   call self%cli%get(switch='--out',                val=self%basename_out,        error=error) ; if (error/=0) stop
-   call self%cli%get(switch='--RE',                 val=self%RE,                  error=error) ; if (error/=0) stop
-   call self%cli%get(switch='--FR',                 val=self%FR,                  error=error) ; if (error/=0) stop
-   call self%cli%get(switch='--zfs',                val=self%zfs,                 error=error) ; if (error/=0) stop
-   call self%cli%get(switch='--level-set',          val=self%is_level_set,        error=error) ; if (error/=0) stop
-   call self%cli%get(switch='--no-turbulent-model', val=self%is_dns,              error=error) ; if (error/=0) stop
-   call self%cli%get(switch='--turbulent-eq',       val=turbulent_eq,             error=error) ; if (error/=0) stop
+   call self%cli%get(        switch='--verbose',            val=self%verbose,             error=error) ; if (error/=0) stop
+   call self%cli%get(        switch='--ipath',              val=self%ipath,               error=error) ; if (error/=0) stop
+   call self%cli%get(        switch='--procinput',          val=self%procinput_file_name, error=error) ; if (error/=0) stop
+   call self%cli%get(        switch='--blocks-map',         val=self%blksmap_file_name,   error=error) ; if (error/=0) stop
+   call self%cli%get(        switch='--myrank',             val=self%myrank,              error=error) ; if (error/=0) stop
+   call self%cli%get(        switch='--mbpar',              val=self%mbpar_file_name,     error=error) ; if (error/=0) stop
+   call self%cli%get(        switch='--grid-level',         val=self%grid_level,          error=error) ; if (error/=0) stop
+   call self%cli%get(        switch='--glob',               val=self%do_glob,             error=error) ; if (error/=0) stop
+   call self%cli%get(        switch='--grd',                val=self%filename_grd,        error=error) ; if (error/=0) stop
+   call self%cli%get(        switch='--icc',                val=self%filename_icc,        error=error) ; if (error/=0) stop
+   call self%cli%get(        switch='--rst',                val=self%filename_rst,        error=error) ; if (error/=0) stop
+   call self%cli%get_varying(switch='--sname-rst',          val=self%sname_rst,           error=error) ; if (error/=0) stop
+   call self%cli%get(        switch='--opath',              val=self%opath,               error=error) ; if (error/=0) stop
+   call self%cli%get(        switch='--out',                val=self%basename_out,        error=error) ; if (error/=0) stop
+   call self%cli%get(        switch='--RE',                 val=self%RE,                  error=error) ; if (error/=0) stop
+   call self%cli%get(        switch='--FR',                 val=self%FR,                  error=error) ; if (error/=0) stop
+   call self%cli%get(        switch='--zfs',                val=self%zfs,                 error=error) ; if (error/=0) stop
+   call self%cli%get(        switch='--level-set',          val=self%is_level_set,        error=error) ; if (error/=0) stop
+   call self%cli%get(        switch='--no-turbulent-model', val=self%is_dns,              error=error) ; if (error/=0) stop
+   call self%cli%get(        switch='--turbulent-eq',       val=turbulent_eq,             error=error) ; if (error/=0) stop
    if (self%cli%run_command('postprocess')) then
       call self%cli%get(group='postprocess',switch='--ascii',      val=self%is_ascii,          error=error) ; if (error/=0) stop
       call self%cli%get(group='postprocess',switch='--tec',        val=is_tec,                 error=error) ; if (error/=0) stop
@@ -170,6 +173,7 @@ contains
       call self%cli%get(group='postprocess',switch='--loads',      val=self%compute_loads,     error=error) ; if (error/=0) stop
       call self%cli%get(group='postprocess',switch='--patch',      val=self%patch,             error=error) ; if (error/=0) stop
       call self%cli%get(group='postprocess',switch='--ext-subzone',val=self%is_extsubzone,     error=error) ; if (error/=0) stop
+      call self%cli%get(group='postprocess',switch='--aero-patch', val=self%is_aero_patch,     error=error) ; if (error/=0) stop
       if (self%cli%is_passed(group='postprocess', switch='--patch')) self%is_patch=.true.
       if (self%compute_lambda2  ) self%compute_metrics = .true.
       if (self%compute_qfactor  ) self%compute_metrics = .true.
@@ -325,6 +329,15 @@ contains
                      required=.false.,                          &
                      act='store',                               &
                      def=OPT_UNSET,                             &
+                     error=error)
+   if (error/=0) stop
+
+   call self%cli%add(switch='--sname-rst',                                &
+                     help='suffix of filename of solution restart files', &
+                     required=.false.,                                    &
+                     act='store',                                         &
+                     def='',                                              &
+                     nargs='+',                                           &
                      error=error)
    if (error/=0) stop
 
@@ -573,6 +586,15 @@ contains
                      act='store_true',                                               &
                      def='.false.',                                                  &
                      group='postprocess',                                            &
+                     error=error)
+   if (error/=0) stop
+
+   call self%cli%add(switch='--aero-patch',                                 &
+                     help='export extracted patches in aeroacustic format', &
+                     required=.false.,                                      &
+                     act='store_true',                                      &
+                     def='.false.',                                         &
+                     group='postprocess',                                   &
                      error=error)
    if (error/=0) stop
 

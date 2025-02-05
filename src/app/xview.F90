@@ -10,11 +10,17 @@ use xview_file_grd_object
 use xview_file_icc_object
 use xview_file_rst_object
 use xview_file_esz_object
+use xview_file_ptc_object
 use xview_file_tec_object
 use xview_file_vtk_object
 use xview_ui_object
 
 implicit none
+
+type :: filenames_object
+   !< A class of file names list.
+   type(string), allocatable :: names(:) !< List of files names.
+endtype filenames_object
 
 type(ui_object) :: ui !< User Interface.
 
@@ -33,20 +39,29 @@ contains
    type(string), allocatable, intent(inout) :: filenames_grd(:)   !< List of grd files.
    type(string), allocatable, intent(inout) :: filenames_icc(:)   !< List of icc files.
    type(string), allocatable, intent(inout) :: filenames_rst(:)   !< List of rst files.
-   type(string), allocatable, intent(inout) :: filenames_esz(:,:) !< List of rst files.
+   type(string), allocatable, intent(inout) :: filenames_esz(:,:) !< List of esz files.
+   type(filenames_object), allocatable      :: filenames(:)       !< Buffer list of files names.
    type(string)                             :: buffer             !< Buffer string.
    integer(I4P)                             :: files_number       !< Number of file.
    integer(I4P)                             :: blocks_number      !< Number of blocks.
    type(string), allocatable                :: tokens(:)          !< String tokens buffer.
    integer(I4P)                             :: Nt                 !< Time steps number.
-   integer(I4P)                             :: f, t, t_old, b     !< Counter.
+   integer(I4P)                             :: f, t, t_old, b, s  !< Counter.
 
    if (ui%is_extsubzone) then
       if (trim(ui%filename_rst)/=OPT_UNSET)  then
          if (ui%do_glob) then
             ! populate filenames_esz
-            ! call buffer%glob(pattern=trim(ui%ipath)//trim(ui%filename_rst)//'*I*', list=filenames_rst)
-            call buffer%glob(pattern=trim(ui%ipath)//trim(ui%filename_rst)//'*', list=filenames_rst)
+            allocate(filenames(size(ui%sname_rst,dim=1)))
+            do s=1, size(ui%sname_rst,dim=1)
+               call buffer%glob(pattern=trim(ui%ipath)//trim(ui%filename_rst)//'*'//trim(ui%sname_rst(s)), list=filenames(s)%names)
+            enddo
+            filenames_rst = [filenames(1)%names(1)]
+            do t=1, size(filenames(1)%names, dim=1)
+               do s=1, size(ui%sname_rst,dim=1)
+                  filenames_rst = [filenames_rst,filenames(s)%names(t)]
+               enddo
+            enddo
             if (allocated(filenames_rst)) then
                files_number = size(filenames_rst, dim=1)
                ! remove ipath from file names
@@ -167,12 +182,20 @@ contains
    type(string), allocatable             :: filenames_rst(:)   !< List of rst files.
    type(string), allocatable             :: filenames_esz(:,:) !< List of esz files.
    type(string), allocatable             :: files_blocks(:,:)  !< Files blocks grouping.
+   type(file_ptc_object)                 :: file_ptc           !< File patches.
    type(file_vtk_object)                 :: file_vtk           !< File VTK.
    integer(I4P)                          :: blocks_number      !< Number of blocks.
    integer(I4P)                          :: Nt                 !< Time steps number.
    integer(I4P)                          :: files_number       !< Number of file.
    integer(I4P)                          :: myrank             !< Current process ID.
    integer(I4P)                          :: f, t, b            !< Counter.
+
+   ! integer(I4P)                          :: patches_extents(1:3,0:6) !< Patches extents [1:np,0:6].
+   ! patches_extents(1,0:6) = [3, 2, 39, 0, 0, 0, 0]
+   ! patches_extents(2,0:6) = [5, 2, 39, 3, 1, 0, 0]
+   ! patches_extents(3,0:6) = [4, 2, 39, 0, 0, 5, 1]
+
+   call file_ptc%load_file(filename='patches.dat', verbose=ui%verbose)
 
    call get_filenames(ui=ui, filenames_grd=filenames_grd, filenames_icc=filenames_icc, filenames_rst=filenames_rst,&
                       filenames_esz=filenames_esz)
@@ -183,6 +206,28 @@ contains
       do t=1, Nt
          do b=1, blocks_number
             if (ui%verbose) print '(A)', ' Postprocess files "'//trim(ui%ipath)//filenames_esz(b,t)//'"'
+            !!--------------rimuovere
+            !if (b==5) then
+            !call postprocess_esz(ui           = ui,                             &
+            !                     myrank       = myrank,                         &
+            !                     ipath        = trim(adjustl(ui%ipath)),        &
+            !                     filename_esz = filenames_esz(b,t)%chars(),     &
+            !                     opath        = trim(adjustl(ui%opath)),        &
+            !                     basename_out = trim(adjustl(ui%basename_out)), &
+            !                     files_blocks = files_blocks(:,b),              &
+            !                     patch=patch,                                   &
+            !                     patches_extents=patches_extents)
+
+            !else
+            !call postprocess_esz(ui           = ui,                             &
+            !                     myrank       = myrank,                         &
+            !                     ipath        = trim(adjustl(ui%ipath)),        &
+            !                     filename_esz = filenames_esz(b,t)%chars(),     &
+            !                     opath        = trim(adjustl(ui%opath)),        &
+            !                     basename_out = trim(adjustl(ui%basename_out)), &
+            !                     files_blocks = files_blocks(:,b),              &
+            !                     patch=patch)
+            !endif
             call postprocess_esz(ui           = ui,                             &
                                  myrank       = myrank,                         &
                                  ipath        = trim(adjustl(ui%ipath)),        &
@@ -190,7 +235,17 @@ contains
                                  opath        = trim(adjustl(ui%opath)),        &
                                  basename_out = trim(adjustl(ui%basename_out)), &
                                  files_blocks = files_blocks(:,b),              &
-                                 patch=patch)
+                                 file_ptc     = file_ptc,                       &
+                                 patch        = patch)
+            !!--------------rimuovere
+            ! call postprocess_esz(ui           = ui,                             &
+            !                      myrank       = myrank,                         &
+            !                      ipath        = trim(adjustl(ui%ipath)),        &
+            !                      filename_esz = filenames_esz(b,t)%chars(),     &
+            !                      opath        = trim(adjustl(ui%opath)),        &
+            !                      basename_out = trim(adjustl(ui%basename_out)), &
+            !                      files_blocks = files_blocks(:,b),              &
+            !                      patch=patch)
          enddo
          if (ui%is_vtk) then
             call file_vtk%save_blocks_file_vtm(file_name=trim(adjustl(ui%opath))//                                               &
@@ -227,25 +282,29 @@ contains
    endif
    endsubroutine postprocess
 
-   subroutine postprocess_esz(ui,myrank,ipath,filename_esz,opath,basename_out,files_blocks,patch)
+   subroutine postprocess_esz(ui,myrank,ipath,filename_esz,opath,basename_out,files_blocks,file_ptc,patch)
    !< Post process single Extracted SubZone (esz) input file.
-   type(ui_object), intent(in)           :: ui              !< User Interface.
-   integer(I4P),    intent(in)           :: myrank          !< Input files process rank in proc.input.
-   character(*),    intent(in)           :: ipath           !< Path to input files.
-   character(*),    intent(in)           :: filename_esz    !< File name of file sol (subzone solution).
-   character(*),    intent(in)           :: opath           !< Path to output files.
-   character(*),    intent(in)           :: basename_out    !< Base name of output files.
-   type(string),    intent(inout)        :: files_blocks(3) !< Files blocks grouping.
-   integer(I4P),    intent(in), optional :: patch           !< Patch boundary conditions.
-   integer(I4P)                          :: blocks_map(2)   !< Processors/Blocks maps.
-   type(string)                          :: buffer          !< String buffer.
-   type(string), allocatable             :: tokens(:)       !< String tokens buffer.
-   type(file_esz_object)                 :: file_esz        !< File esz.
-   type(file_vtk_object)                 :: file_vtk        !< File VTK.
-   type(file_tec_object)                 :: file_tec        !< File TEC.
+   type(ui_object),       intent(in)           :: ui                     !< User Interface.
+   integer(I4P),          intent(in)           :: myrank                 !< Input files process rank in proc.input.
+   character(*),          intent(in)           :: ipath                  !< Path to input files.
+   character(*),          intent(in)           :: filename_esz           !< File name of file sol (subzone solution).
+   character(*),          intent(in)           :: opath                  !< Path to output files.
+   character(*),          intent(in)           :: basename_out           !< Base name of output files.
+   type(string),          intent(inout)        :: files_blocks(3)        !< Files blocks grouping.
+   type(file_ptc_object), intent(in)           :: file_ptc               !< File patches.
+   integer(I4P),          intent(in), optional :: patch                  !< Patch boundary conditions.
+   integer(I4P)                                :: blocks_map(2)          !< Processors/Blocks maps.
+   type(string)                                :: buffer                 !< String buffer.
+   type(string), allocatable                   :: tokens(:)              !< String tokens buffer.
+   type(file_esz_object)                       :: file_esz               !< File esz.
+   type(file_vtk_object)                       :: file_vtk               !< File VTK.
+   type(file_tec_object)                       :: file_tec               !< File TEC.
+   ! integer(I4P),    intent(in), optional :: patches_extents(1:,0:) !< Patches extents [1:np,0:6].
 
    if (filename_esz/=OPT_UNSET) call file_esz%load_file(filename=ipath//filename_esz,           &
+                                                        file_ptc=file_ptc,                      &
                                                         patch=patch,                            &
+                                                        ! patches_extents=patches_extents,        &
                                                         RE=ui%RE, rFR2=ui%rFR2, zfs=ui%zfs,     &
                                                         is_level_set=ui%is_level_set,           &
                                                         is_zeroeq=ui%is_zeroeq,                 &
@@ -282,6 +341,9 @@ contains
                                            sol=file_esz%block_esz%sol, &
                                            files_blocks=files_blocks)
    endif
+   if (ui%is_aero_patch) call file_ptc%save_block_file_aero_patches(grd=file_esz%block_esz%grd, &
+                                                                    sol=file_esz%block_esz%sol, &
+                                                                    files_blocks=files_blocks)
    ! if (ui%is_tec) then
    !    buffer = filename_esz
    !    call buffer%split(tokens=tokens, sep='_I')

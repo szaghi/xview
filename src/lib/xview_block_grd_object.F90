@@ -44,6 +44,8 @@ type :: block_grd_object
                                                          !<+ 10 => node j-max;
                                                          !<+ 11 => node k-min;
                                                          !<+ 12 => node k-max;
+   character(6), allocatable :: patches_dir(:)           !< Patches X/R/THETA direction respect IJK [1:np].
+   integer(I4P), allocatable :: patches_id(:)            !< Patches ID [1:np].
    logical                   :: is_loaded=.false.        !< Flag for checking if the block is loaded.
    contains
       ! public methods
@@ -62,6 +64,7 @@ type :: block_grd_object
       procedure, pass(self) :: load_nodes               !< Load block nodes from file.
       procedure, pass(self) :: save_dimensions          !< Save block dimensions into file.
       procedure, pass(self) :: save_nodes               !< Save block nodes into file.
+      procedure, pass(self) :: set_patches_extents      !< Set patches extents by file input.
       procedure, pass(self) :: traslate                 !< Traslate block nodes by a given traslation vector.
       ! private methods
       procedure, pass(self) :: compute_gradient_scalar  !< Compute the gradient (vector) of a scalar.
@@ -1052,6 +1055,88 @@ contains
       write(file_unit)(((nodes(i, j, k)%z, i=0-gc(1), Ni + gc(2)), j=0-gc(3), Nj + gc(4)), k=0-gc(5), Nk + gc(6))
    endassociate
    endsubroutine save_nodes
+
+   subroutine set_patches_extents(self, patches_extents, patches_dir, patches_id)
+   !< Set the patches extents by input file.
+   !< Paches array format:
+   !< [1:np, 0:6] where for each p
+   !< p, 0 = block face [1,6]
+   !< p, 1 = first direction to be truncated [1,6] (i,j or k), if 0 no truncation occurs
+   !< p, 2 = min/max cell of truncation on first direction (i,j or k)
+   !< p, 3 = second direction to be truncated [1,6] (i,j or k), if 0 no truncation occurs
+   !< p, 4 = min/max cell of truncation on second direction (i,j or k)
+   !< p, 5 = third direction to be truncated [1,6] (i,j or k), if 0 no truncation occurs
+   !< p, 6 = min/max cell of truncation on third  direction (i,j or k)
+   class(block_grd_object),   intent(inout) :: self                   !< Block data.
+   integer(I4P),              intent(in)    :: patches_extents(1:,0:) !< Patches extents [1:np,0:6].
+   character(6),              intent(in)    :: patches_dir(:)         !< Patches X/R/THETA direction respect IJK [1:np].
+   integer(I4P),              intent(in)    :: patches_id(:)          !< Patches ID [1:np].
+   integer(I4P)                             :: np                     !< Number of patches.
+   integer(I4P)                             :: p, f                   !< Counter.
+
+   if (allocated(self%patches_dir    )) deallocate(self%patches_dir    ) ; self%patches_dir = patches_dir
+   if (allocated(self%patches_id     )) deallocate(self%patches_id     ) ; self%patches_id  = patches_id
+   if (allocated(self%patches_extents)) deallocate(self%patches_extents)
+   np = size(patches_extents, dim=1)
+   allocate(self%patches_extents(1:np, 0:12))
+   associate(Ni=>self%Ni, Nj=>self%Nj, Nk=>self%Nk)
+   self%patches_extents(:, 1 ) = 1 ; self%patches_extents(:, 2 ) = Ni
+   self%patches_extents(:, 3 ) = 1 ; self%patches_extents(:, 4 ) = Nj
+   self%patches_extents(:, 5 ) = 1 ; self%patches_extents(:, 6 ) = Nk
+   self%patches_extents(:, 7 ) = 0 ; self%patches_extents(:, 8 ) = Ni
+   self%patches_extents(:, 9 ) = 0 ; self%patches_extents(:, 10) = Nj
+   self%patches_extents(:, 11) = 0 ; self%patches_extents(:, 12) = Nk
+   do p=1, np
+      ! set whole patch
+      self%patches_extents(p,0) = patches_extents(p,0)
+      select case(patches_extents(p,0))
+      case(1)
+         self%patches_extents(p, 1 ) = 1  ; self%patches_extents(p, 2 ) = 1
+         self%patches_extents(p, 7 ) = 0  ; self%patches_extents(p, 8 ) = 0
+      case(2)
+         self%patches_extents(p, 1 ) = Ni ; self%patches_extents(p, 2 ) = Ni
+         self%patches_extents(p, 7 ) = Ni ; self%patches_extents(p, 8 ) = Ni
+      case(3)
+         self%patches_extents(p, 3 ) = 1  ; self%patches_extents(p, 4 ) = 1
+         self%patches_extents(p, 9 ) = 0  ; self%patches_extents(p, 10) = 0
+      case(4)
+         self%patches_extents(p, 3 ) = Nj ; self%patches_extents(p, 4 ) = Nj
+         self%patches_extents(p, 9 ) = Nj ; self%patches_extents(p, 10) = Nj
+      case(5)
+         self%patches_extents(p, 5 ) = 1  ; self%patches_extents(p, 6 ) = 1
+         self%patches_extents(p, 11) = 0  ; self%patches_extents(p, 12) = 0
+      case(6)
+         self%patches_extents(p, 5 ) = Nk ; self%patches_extents(p, 6 ) = Nk
+         self%patches_extents(p, 11) = Nk ; self%patches_extents(p, 12) = Nk
+      endselect
+      ! set (optional) patch truncations on i,j,k directions
+      do f=1, 5, 2 ! loop over direction i,j,k
+         if (patches_extents(p,f)>0) then
+            select case(patches_extents(p,f))
+            case(1) ! min i
+               self%patches_extents(p, 1 ) = patches_extents(p,f+1)
+               self%patches_extents(p, 7 ) = patches_extents(p,f+1) - 1
+            case(2) ! max i
+               self%patches_extents(p, 2 ) = patches_extents(p,f+1)
+               self%patches_extents(p, 8 ) = patches_extents(p,f+1)
+            case(3) ! min j
+               self%patches_extents(p, 3 ) = patches_extents(p,f+1)
+               self%patches_extents(p, 9 ) = patches_extents(p,f+1) - 1
+            case(4) ! max j
+               self%patches_extents(p, 4 ) = patches_extents(p,f+1)
+               self%patches_extents(p, 10) = patches_extents(p,f+1)
+            case(5) ! min k
+               self%patches_extents(p, 5 ) = patches_extents(p,f+1)
+               self%patches_extents(p, 11) = patches_extents(p,f+1) - 1
+            case(6) ! max k
+               self%patches_extents(p, 6 ) = patches_extents(p,f+1)
+               self%patches_extents(p, 12) = patches_extents(p,f+1)
+            endselect
+         endif
+      enddo
+   enddo
+   endassociate
+   endsubroutine set_patches_extents
 
    elemental subroutine traslate(self, traslation)
    !< Traslate block nodes by a given traslation vector.

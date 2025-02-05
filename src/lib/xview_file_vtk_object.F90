@@ -99,9 +99,14 @@ contains
                 ni1=>grd%patches_extents(p, 7 ), ni2=>grd%patches_extents(p, 8 ), &
                 nj1=>grd%patches_extents(p, 9 ), nj2=>grd%patches_extents(p, 10), &
                 nk1=>grd%patches_extents(p, 11), nk2=>grd%patches_extents(p, 12))
+         ! if (present(patch)) then
          if (present(patch)) then
             file_name_ = base_name//'-'//files_blocks(3)//'-patch_'//trim(strz(patch, nz_pad=3))//&
                          '-face_'//trim(str(grd%patches_extents(p, 0), no_sign=.true.))//         &
+                         '-blk_'//trim(strz(blocks_map(2), nz_pad=4))//'-grp_'//trim(strz(blocks_map(1), nz_pad=3))
+         elseif (size(grd%patches_extents, dim=1)>1) then
+            file_name_ = base_name//'-'//files_blocks(3)//                                &
+                         '-face_'//trim(str(grd%patches_extents(p, 0), no_sign=.true.))// &
                          '-blk_'//trim(strz(blocks_map(2), nz_pad=4))//'-grp_'//trim(strz(blocks_map(1), nz_pad=3))
          else
             file_name_ = base_name//'-'//files_blocks(3)//&

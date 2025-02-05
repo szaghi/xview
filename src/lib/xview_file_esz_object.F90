@@ -6,6 +6,7 @@ use penf
 
 use xview_block_esz_object
 use xview_file_object
+use xview_file_ptc_object
 
 implicit none
 private
@@ -30,13 +31,14 @@ contains
    call self%block_esz%destroy
    endsubroutine destroy
 
-   subroutine load_file(self,filename,is_cell_centered,patch,RE,rFR2,zfs,is_level_set,is_zeroeq,is_oneeq,is_twoeq, &
-                        compute_metrics,compute_lambda2,compute_qfactor,compute_helicity,compute_vorticity,        &
-                        compute_div2LT,compute_grad_p,compute_k_ratio,compute_yplus,compute_tau,compute_div_tau,   &
+   subroutine load_file(self,filename,file_ptc,is_cell_centered,patch,RE,rFR2,zfs,is_level_set,is_zeroeq,is_oneeq,is_twoeq, &
+                        compute_metrics,compute_lambda2,compute_qfactor,compute_helicity,compute_vorticity,                 &
+                        compute_div2LT,compute_grad_p,compute_k_ratio,compute_yplus,compute_tau,compute_div_tau,            &
                         compute_loads,verbose)
    !< Load file.
    class(file_esz_object), intent(inout)        :: self              !< File data.
    character(*),           intent(in)           :: filename          !< File name of geo file.
+   type(file_ptc_object),  intent(in)           :: file_ptc          !< File patches.
    logical,                intent(in), optional :: is_cell_centered  !< Define variables at cell centers or nodes.
    integer(I4P),           intent(in), optional :: patch             !< Patch boundary conditions.
    real(R8P),              intent(in), optional :: RE                !< Reynolds number.
@@ -68,8 +70,9 @@ contains
    if (self%is_file_present()) then
       open(newunit=file_unit, file=trim(adjustl(filename)), form='unformatted', action='read')
       call self%block_esz%load_solution(file_unit=file_unit,                 &
-                                        is_cell_centered=is_cell_centered,   &
+                                        file_ptc=file_ptc,                   &
                                         patch=patch,                         &
+                                        is_cell_centered=is_cell_centered,   &
                                         RE=RE, rFR2=rFR2, zfs=zfs,           &
                                         is_level_set=is_level_set,           &
                                         is_zeroeq=is_zeroeq,                 &
