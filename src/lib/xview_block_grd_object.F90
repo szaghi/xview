@@ -1114,23 +1114,23 @@ contains
          if (patches_extents(p,f)>0) then
             select case(patches_extents(p,f))
             case(1) ! min i
-               self%patches_extents(p, 1 ) = patches_extents(p,f+1)
-               self%patches_extents(p, 7 ) = patches_extents(p,f+1) - 1
+               self%patches_extents(p, 1 ) = patches_extents(p,f+1) + 1 ! cell index
+               self%patches_extents(p, 7 ) = patches_extents(p,f+1)     ! node index
             case(2) ! max i
-               self%patches_extents(p, 2 ) = patches_extents(p,f+1)
-               self%patches_extents(p, 8 ) = patches_extents(p,f+1)
+               self%patches_extents(p, 2 ) = patches_extents(p,f+1)     ! cell index
+               self%patches_extents(p, 8 ) = patches_extents(p,f+1)     ! node index
             case(3) ! min j
-               self%patches_extents(p, 3 ) = patches_extents(p,f+1)
-               self%patches_extents(p, 9 ) = patches_extents(p,f+1) - 1
+               self%patches_extents(p, 3 ) = patches_extents(p,f+1) + 1 ! cell index
+               self%patches_extents(p, 9 ) = patches_extents(p,f+1)     ! node index
             case(4) ! max j
-               self%patches_extents(p, 4 ) = patches_extents(p,f+1)
-               self%patches_extents(p, 10) = patches_extents(p,f+1)
+               self%patches_extents(p, 4 ) = patches_extents(p,f+1)     ! cell index
+               self%patches_extents(p, 10) = patches_extents(p,f+1)     ! node index
             case(5) ! min k
-               self%patches_extents(p, 5 ) = patches_extents(p,f+1)
-               self%patches_extents(p, 11) = patches_extents(p,f+1) - 1
+               self%patches_extents(p, 5 ) = patches_extents(p,f+1) + 1 ! cell index
+               self%patches_extents(p, 11) = patches_extents(p,f+1)     ! node index
             case(6) ! max k
-               self%patches_extents(p, 6 ) = patches_extents(p,f+1)
-               self%patches_extents(p, 12) = patches_extents(p,f+1)
+               self%patches_extents(p, 6 ) = patches_extents(p,f+1)     ! cell index
+               self%patches_extents(p, 12) = patches_extents(p,f+1)     ! node index
             endselect
          endif
       enddo
