@@ -184,6 +184,8 @@ contains
          if (allocated(sol%qfactor)) &
          error=output%xml_writer%write_dataarray(data_name='qfactor',x=sol%qfactor(i1:i2,j1:j2,k1:k2),one_component=.true.)
          if (allocated(sol%helicity)) &
+         error=output%xml_writer%write_dataarray(data_name='liutex',x=sol%liutex(i1:i2,j1:j2,k1:k2),one_component=.true.)
+         if (allocated(sol%helicity)) &
          error=output%xml_writer%write_dataarray(data_name='helicity',x=sol%helicity(i1:i2,j1:j2,k1:k2),one_component=.true.)
          if (allocated(sol%vorticity)) &
          error=output%xml_writer%write_dataarray(data_name='vorticity', x=sol%vorticity(i1:i2,j1:j2,k1:k2)%x, &

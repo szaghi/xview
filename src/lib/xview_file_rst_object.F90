@@ -51,10 +51,10 @@ contains
    allocate(self%blocks(1:self%blocks_number))
    endsubroutine alloc
 
-   subroutine load_file(self,file_grd,file_icc,filename,patch,RE,rFR2,zfs,                                 &
-                        is_level_set,is_zeroeq,is_oneeq,is_twoeq,is_cell_centered,                         &
-                        compute_lambda2,compute_qfactor,compute_helicity,compute_vorticity,compute_div2LT, &
-                        compute_grad_p,compute_k_ratio,                                                    &
+   subroutine load_file(self,file_grd,file_icc,filename,patch,RE,rFR2,zfs,                                   &
+                        is_level_set,is_zeroeq,is_oneeq,is_twoeq,is_cell_centered,                           &
+                        compute_lambda2,compute_qfactor,compute_liutex, compute_helicity,compute_vorticity,  &
+                        compute_div2LT, compute_grad_p,compute_k_ratio,                                      &
                         compute_yplus,compute_tau,compute_div_tau,compute_loads,verbose)
    !< Load file.
    class(file_rst_object), intent(inout)        :: self              !< File data.
@@ -72,6 +72,7 @@ contains
    logical,                intent(in), optional :: is_cell_centered  !< Define variables at cell centers or nodes.
    logical,                intent(in), optional :: compute_lambda2   !< Compute lamda2 field.
    logical,                intent(in), optional :: compute_qfactor   !< Compute qfactor field.
+   logical,                intent(in), optional :: compute_liutex    !< Compute liutex field.
    logical,                intent(in), optional :: compute_helicity  !< Compute helicity field.
    logical,                intent(in), optional :: compute_vorticity !< Compute vorticity field.
    logical,                intent(in), optional :: compute_div2LT    !< Compute double divergence of Lighthill tensor.
@@ -103,6 +104,7 @@ contains
                                              is_twoeq=is_twoeq,                   &
                                              compute_lambda2=compute_lambda2,     &
                                              compute_qfactor=compute_qfactor,     &
+                                             compute_liutex=compute_liutex,       &
                                              compute_helicity=compute_helicity,   &
                                              compute_vorticity=compute_vorticity, &
                                              compute_grad_p=compute_grad_p,       &

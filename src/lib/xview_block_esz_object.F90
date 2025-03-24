@@ -49,7 +49,7 @@ contains
 
    subroutine load_solution(self,file_unit,file_ptc,patch,is_cell_centered,RE,rFR2,zfs,         &
                             is_level_set,is_zeroeq,is_oneeq,is_twoeq,                           &
-                            compute_lambda2,compute_qfactor,compute_helicity,compute_vorticity, &
+                            compute_lambda2,compute_qfactor,compute_liutex,compute_helicity,compute_vorticity, &
                             compute_div2LT,compute_grad_p,compute_k_ratio,compute_yplus,compute_tau,compute_div_tau,compute_loads)
    !< Load subzone solution from file.
    class(block_esz_object), intent(inout)        :: self                   !< Block data.
@@ -66,6 +66,7 @@ contains
    logical,                 intent(in), optional :: is_twoeq               !< Use *two* equations turbulence model.
    logical,                 intent(in), optional :: compute_lambda2        !< Compute lamda2 field.
    logical,                 intent(in), optional :: compute_qfactor        !< Compute qfactor field.
+   logical,                 intent(in), optional :: compute_liutex         !< Compute liutex field.
    logical,                 intent(in), optional :: compute_helicity       !< Compute helicity field.
    logical,                 intent(in), optional :: compute_vorticity      !< Compute vorticity field.
    logical,                 intent(in), optional :: compute_div2LT         !< Compute double divergence of Lighthill tensor.
@@ -114,9 +115,9 @@ contains
       ! load subzone solution
       call sol%init(Ni=Ni,Nj=Nj,Nk=Nk,                                                                     &
                     is_level_set=is_level_set,is_zeroeq=is_zeroeq,is_oneeq=is_oneeq,is_twoeq=is_twoeq,     &
-                    has_lambda2=compute_lambda2,has_qfactor=compute_qfactor,has_helicity=compute_helicity, &
-                    has_vorticity=compute_vorticity,has_div2LT=compute_div2LT,has_grad_p=compute_grad_p,   &
-                    has_k_ratio=compute_k_ratio,                                                           &
+                    has_lambda2=compute_lambda2,has_qfactor=compute_qfactor,has_liutex=compute_liutex,     &
+                    has_helicity=compute_helicity,has_vorticity=compute_vorticity,                         &     
+                    has_div2LT=compute_div2LT,has_grad_p=compute_grad_p,has_k_ratio=compute_k_ratio,       &
                     has_yplus=compute_yplus,has_tau=compute_tau,has_div_tau=compute_div_tau,has_loads=compute_loads)
       read(file_unit)(((sol%momentum(i,j,k)%x,i=0,Ni),j=0,Nj),k=0,Nk)
       read(file_unit)(((sol%momentum(i,j,k)%y,i=0,Ni),j=0,Nj),k=0,Nk)

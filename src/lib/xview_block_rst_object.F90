@@ -28,6 +28,7 @@ type :: block_rst_object
    real(R8P),    allocatable :: turbulent_kinetic_energy_dissipation(:,:,:) !< Turbulent kinetic energy dissipation field.
    real(R8P),    allocatable :: lambda2(:,:,:)                              !< Variable to identify vortices (lambda 2).
    real(R8P),    allocatable :: qfactor(:,:,:)                              !< Variable to identify vortices (q factor).
+   real(R8P),    allocatable :: liutex(:,:,:)                               !< Variable to identify vortices (liutex).
    real(R8P),    allocatable :: helicity(:,:,:)                             !< Helicity.
    type(vector), allocatable :: vorticity(:,:,:)                            !< Vorticity.
    type(vector), allocatable :: grad_p(:,:,:)                               !< Pressure Gradient.
@@ -103,6 +104,7 @@ contains
    if (allocated(self%turbulent_kinetic_energy_dissipation)) deallocate(self%turbulent_kinetic_energy_dissipation)
    if (allocated(self%lambda2))                              deallocate(self%lambda2)
    if (allocated(self%qfactor))                              deallocate(self%qfactor)
+   if (allocated(self%liutex))                               deallocate(self%liutex)
    if (allocated(self%helicity))                             deallocate(self%helicity)
    if (allocated(self%vorticity))                            deallocate(self%vorticity)
    if (allocated(self%grad_p))                               deallocate(self%grad_p)
@@ -123,6 +125,7 @@ contains
    self%is_twoeq      =.false.
    self%has_lambda2   =.false.
    self%has_qfactor   =.false.
+   self%has_liutex    =.false.
    self%has_helicity  =.false.
    self%has_vorticity =.false.
    self%has_yplus     =.false.
@@ -157,6 +160,7 @@ contains
    ! auxiliary variables
    if (self%has_lambda2  ) allocate(self%lambda2(  1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
    if (self%has_qfactor  ) allocate(self%qfactor(  1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
+   if (self%has_liutex   ) allocate(self%liutex(   1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
    if (self%has_helicity ) allocate(self%helicity( 1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
    if (self%has_vorticity) allocate(self%vorticity(1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
    if (self%has_div2LT   ) allocate(self%div2LT(   1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
@@ -186,7 +190,9 @@ contains
    real(R8P),               intent(in), optional :: rFR2  !< 1/(Froude number)^2.
    real(R8P),               intent(in), optional :: zfs   !< Z quote of free surface.
 
-   if ((self%has_lambda2).or.(self%has_qfactor).or.(self%has_helicity).or.(self%has_vorticity)) call self%compute_vorticity(grd)
+   if ((self%has_lambda2).or.(self%has_qfactor).or.(self%has_liutex).or.(self%has_helicity).or.(self%has_vorticity))  then
+      call self%compute_vorticity(grd)
+   endif
    if (self%has_div2LT)  call self%compute_div2LT(grd)
    if (self%has_grad_p)  call self%compute_grad_p(grd)
    if (self%has_k_ratio) call self%compute_kinetic_energy_ratio(grd)
@@ -610,7 +616,15 @@ contains
    real(R8P), dimension(3,3)              :: SO,S,O                            !< Matrices.
    integer(I4P)                           :: i,j,k,ii,jj,kk,iter               !< Counter.
    real(R8P), parameter                   :: EPS6=1d-6, EPS9=1d-9, EPS12=1d-12 !< Tolerances.
-
+   ! Variables for liutex method
+   !real(R8P)                              :: r_hat                             !< Dummy variable for liutex method.
+   real(R8P)                              :: w_dot_r                           !< Dummy variable for liutex method.
+   real(R8P), dimension(3)                :: eig_vec_r                         !< Dummy variable for liutex method.
+   real(R8P), dimension(3,3)              :: r_liutex                          !< Dummy variable for liutex method.
+   real(R8P)                              :: aa, b                             !< Dummy variable for liutex method.
+   real(R8P)                              :: delta                             !< Dummy variable for liutex method.
+   real(R8P)                              :: eig3r                             !< Dummy variable for liutex method.
+   complex(R8P)                           :: eig1c                             !< Dummy variable for liutex method.
    associate(Ni=>grd%Ni,Nj=>grd%Nj,Nk=>grd%Nk,gc=>grd%gc, &
              momentum=>self%momentum,lambda2=>self%lambda2,qfactor=>self%qfactor,helicity=>self%helicity,vorticity=>self%vorticity)
    ! print '(A)', 'compute vorticity'
@@ -638,7 +652,7 @@ contains
          enddo
       enddo
    endif
-   if (self%has_lambda2.or.self%has_qfactor) then
+   if (self%has_lambda2.or.self%has_qfactor.or.self%has_liutex) then
       ! if (self%has_lambda2) print '(A)', 'compute lambda2'
       ! if (self%has_qfactor) print '(A)', 'compute qfactor'
       do k=0,Nk+1
@@ -666,12 +680,12 @@ contains
 
                if (self%has_lambda2) then
                   ! coefficients of characterist polynomial: lamda^3 + c(2)*lamda^2 + c(1)*lamda + c(0) = 0
-                  c(2) = -(SO(1,1) + SO(2,2) + SO(3,3))
-                  c(1) = SO(1,1)*SO(2,2) + SO(1,1)*SO(3,3) + SO(2,2)*SO(3,3) - SO(2,3)**2 - SO(1,3)**2 - SO(1,2)**2
-                  c(0) = SO(1,1)*SO(2,3)**2 + SO(2,2)*SO(1,3)**2 + SO(3,3)*SO(1,2)**2 - 2._R8P*SO(2,3)*SO(1,3)*SO(1,2) &
-                       - SO(1,1)*SO(2,2)*SO(3,3)
+                  c(2)          = -(SO(1,1) + SO(2,2) + SO(3,3))
+                  c(1)          =   SO(1,1)*SO(2,2) + SO(1,1)*SO(3,3) + SO(2,2)*SO(3,3) - SO(2,3)**2 - SO(1,3)**2 - SO(1,2)**2
+                  c(0)          =   SO(1,1)*SO(2,3)**2 + SO(2,2)*SO(1,3)**2 + SO(3,3)*SO(1,2)**2 - 2._R8P*SO(2,3)*SO(1,3)*SO(1,2) &
+                                   -SO(1,1)*SO(2,2)*SO(3,3)
                   ! compute second eigenvalue of characteristic polynomial
-                  mu = sqrt(c(2)**2 - 3._R8P*c(1))
+                  mu   = sqrt(c(2)**2 - 3._R8P*c(1))
                   emin = (-c(2)-mu)/3._R8P
                   emax = (-c(2)+mu)/3._R8P
                   do iter=1,100
@@ -685,6 +699,42 @@ contains
                      if (abs(fval)<eps9 .and.((emax-emin)/eval)<eps6) exit
                   end do
                   lambda2(i,j,k) = eval
+               endif
+
+               if (self%has_liutex) then
+                  tt            = matmul(gv(:,:,i,j,k),gv(:,:,i,j,k))
+                  c(0)          = -(gv(1,1,i,j,k)*(gv(2,2,i,j,k)*gv(3,3,i,j,k)-gv(2,3,i,j,k)*gv(3,2,i,j,k)) &
+                                  - gv(1,2,i,j,k)*(gv(2,1,i,j,k)*gv(3,3,i,j,k)-gv(2,3,i,j,k)*gv(3,1,i,j,k)) &
+                                  + gv(1,3,i,j,k)*(gv(2,1,i,j,k)*gv(3,2,i,j,k)-gv(2,2,i,j,k)*gv(3,1,i,j,k)))
+                  c(2)          = -(gv(1,1,i,j,k) + gv(2,2,i,j,k) + gv(3,3,i,j,k))
+                  c(1)          = -0.5_R8P*(tt(1,1) + tt(2,2) + tt(3,3) - (c(2))**2)
+                  mu            = sqrt(c(2)**2 - 3._R8P*c(1))
+                  delta         = 18._R8P*c(1)*c(2)*c(0) - 4._R8P*c(2)**3 * c(0) + c(1)**2 * c(2)**2 - 4._R8P*c(1)**3 - 27._R8P*c(0)**2
+                  delta         = -delta / 108._R8P
+                  liutex(i,j,k) = 0._R8P  
+                  if (delta.gt.0._R8P) then
+                     t  = (2._R8P*c(2)**3 - 9._R8P*c(1)*c(2) + 27._R8P*c(0)) / 54._R8P
+                     aa = -sign(1._R8P, t) * ( abs(t) + sqrt(delta) )**(1._R8P/3._R8P)
+                     if (aa.eq.0._R8P) then
+                         b = 0._R8P
+                     else
+                         b = mu / aa
+                     endif
+                     eig1c        = cmplx(-0.5_R8P*(aa+b) - c(2)/3._R8P, 0.5_R8P*sqrt(3._R8P)*(aa-b))
+                     eig3r        = aa + b - c(2)/3._R8P
+                     eig_vec_r(1) = (gv(1,2,i,j,k)* gv(2,3,i,j,k)-gv(1,1,i,j,k)*(gv(2,2,i,j,k)-eig3r))
+                     eig_vec_r(2) = (gv(1,3,i,j,k)* gv(2,1,i,j,k)-gv(1,1,i,j,k)* gv(2,3,i,j,k))
+                     eig_vec_r(3) = (gv(1,1,i,j,k)*(gv(2,2,i,j,k)-eig3r)-gv(1,2,i,j,k)*gv(2,1,i,j,k))
+                     eig_vec_r    = eig_vec_r / norm2(eig_vec_r)
+                     aa           = dot_product(vorticity(i,j,k), eig_vec_r)
+                     if (aa.le.0._R8P) then
+                        r_liutex = - eig_vec_r
+                     else
+                        r_liutex = + eig_vec_r
+                     endif
+                     w_dot_r       = dot_product(vorticity(i,j,k), r_liutex)
+                     liutex(i,j,k) = w_dot_r - sqrt(w_dot_r**2 - 4._R8P*aimag(eig1c)**2)
+                  endif
                endif
             enddo
          enddo
@@ -868,6 +918,7 @@ contains
    logical,                 intent(in), optional :: has_vorticity !< Solution has vorticity field.
    logical,                 intent(in), optional :: has_div2LT    !< Solution has double divergence of Lighthill tensor.
    logical,                 intent(in), optional :: has_grad_p    !< Solution has pressure gradient.
+   logical,                 intent(in), optional :: has_liutex    !< Solution has liutex field.
    logical,                 intent(in), optional :: has_k_ratio   !< Solution has kinetic energy ratio.
    logical,                 intent(in), optional :: has_yplus     !< Solution has y+ field.
    logical,                 intent(in), optional :: has_tau       !< Solution has tau field.
@@ -885,6 +936,7 @@ contains
    if (present(is_twoeq      )) self%is_twoeq      = is_twoeq
    if (present(has_lambda2   )) self%has_lambda2   = has_lambda2
    if (present(has_qfactor   )) self%has_qfactor   = has_qfactor
+   if (present(has_liutex    )) self%has_liutex    = has_liutex
    if (present(has_helicity  )) self%has_helicity  = has_helicity
    if (present(has_vorticity )) self%has_vorticity = has_vorticity
    if (present(has_div2LT    )) self%has_div2LT    = has_div2LT
@@ -928,6 +980,9 @@ contains
    if (allocated(self%qfactor)) then
       tmp = self%qfactor ; call interpolate_R8P(var=tmp, vari=self%qfactor)
    endif
+   if (allocated(self%liutex)) then
+      tmp = self%liutex ; call interpolate_R8P(var=tmp, vari=self%liutex)
+   endif
    if (allocated(self%helicity)) then
       tmp = self%helicity ; call interpolate_R8P(var=tmp, vari=self%helicity)
    endif
@@ -966,7 +1021,7 @@ contains
 
    subroutine load_dimensions(self, file_unit, is_level_set, is_zeroeq, is_oneeq, is_twoeq,                     &
                               compute_lambda2,compute_qfactor,compute_helicity,compute_vorticity,compute_div2LT,&
-                              compute_grad_p,compute_k_ratio,                                                   &
+                              compute_grad_p,computex_liutex, compute_k_ratio,                                                   &
                               compute_yplus,compute_tau,compute_div_tau,compute_loads)
    !< Load block dimensions from file.
    !<
@@ -983,6 +1038,7 @@ contains
    logical,                 intent(in), optional :: compute_vorticity !< Compute vorticity field.
    logical,                 intent(in), optional :: compute_div2LT    !< Compute double divergence of Lighthill tensor.
    logical,                 intent(in), optional :: compute_grad_p    !< Compute gradient pressure.
+   logical,                 intent(in), optional :: compute_liutex    !< Compute liutex.
    logical,                 intent(in), optional :: compute_k_ratio   !< Compute kinetic energy ratio.
    logical,                 intent(in), optional :: compute_yplus     !< Compute y+ field.
    logical,                 intent(in), optional :: compute_tau       !< Compute tau field.
@@ -1001,14 +1057,14 @@ contains
                      is_level_set=is_level_set,is_zeroeq=is_zeroeq,is_oneeq=is_oneeq,is_twoeq=is_twoeq,     &
                      has_lambda2=compute_lambda2,has_qfactor=compute_qfactor,has_helicity=compute_helicity, &
                      has_vorticity=compute_vorticity,has_div2LT=compute_div2LT,has_grad_p=compute_grad_p,   &
-                     has_k_ratio=compute_k_ratio,                                                           &
+                     has_liutex=compute_liutex, has_k_ratio=compute_k_ratio,                                &
                      has_yplus=compute_yplus,has_tau=compute_tau,has_div_tau=compute_div_tau,has_loads=compute_loads)
    else
       call self%init(Ni=Ni,Nj=Nj,Nk=Nk,                                                                     &
                      is_level_set=is_level_set,is_zeroeq=is_zeroeq,is_oneeq=is_oneeq,is_twoeq=is_twoeq,     &
                      has_lambda2=compute_lambda2,has_qfactor=compute_qfactor,has_helicity=compute_helicity, &
                      has_vorticity=compute_vorticity,has_div2LT=compute_div2LT,has_grad_p=compute_grad_p,   &
-                     has_k_ratio=compute_k_ratio,                                                           &
+                     has_liutex=compute_liutex, has_k_ratio=compute_k_ratio,                                &
                      has_yplus=compute_yplus,has_tau=compute_tau,has_div_tau=compute_div_tau,has_loads=compute_loads)
    endif
    endsubroutine load_dimensions

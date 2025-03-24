@@ -55,6 +55,7 @@ type :: ui_object
    logical                      :: compute_metrics=.false.  !< Compute metrics.
    logical                      :: compute_lambda2=.false.  !< Compute lamda2 field.
    logical                      :: compute_qfactor=.false.  !< Compute qfactor field.
+   logical                      :: compute_liutex=.false.   !< Compute liutex field.
    logical                      :: compute_helicity=.false. !< Compute helicity field.
    logical                      :: compute_vorticity=.false.!< Compute vorticity field.
    logical                      :: compute_grad_p=.false.   !< Compute gradient pressure.
@@ -162,6 +163,7 @@ contains
       call self%cli%get(group='postprocess',switch='--metrics',    val=self%compute_metrics,   error=error) ; if (error/=0) stop
       call self%cli%get(group='postprocess',switch='--lambda2',    val=self%compute_lambda2,   error=error) ; if (error/=0) stop
       call self%cli%get(group='postprocess',switch='--qfactor',    val=self%compute_qfactor,   error=error) ; if (error/=0) stop
+      call self%cli%get(group='postprocess',switch='--liutex',     val=self%compute_liutex,    error=error) ; if (error/=0) stop
       call self%cli%get(group='postprocess',switch='--helicity',   val=self%compute_helicity,  error=error) ; if (error/=0) stop
       call self%cli%get(group='postprocess',switch='--vorticity',  val=self%compute_vorticity, error=error) ; if (error/=0) stop
       call self%cli%get(group='postprocess',switch='--gradp',      val=self%compute_grad_p,    error=error) ; if (error/=0) stop
@@ -177,6 +179,7 @@ contains
       if (self%cli%is_passed(group='postprocess', switch='--patch')) self%is_patch=.true.
       if (self%compute_lambda2  ) self%compute_metrics = .true.
       if (self%compute_qfactor  ) self%compute_metrics = .true.
+      if (self%compute_liutex   ) self%compute_metrics = .true.
       if (self%compute_helicity ) self%compute_metrics = .true.
       if (self%compute_vorticity) self%compute_metrics = .true.
       if (self%compute_grad_p   ) self%compute_metrics = .true.
@@ -482,6 +485,15 @@ contains
 
    call self%cli%add(switch='--qfactor',           &
                      help='compute qfactor field', &
+                     required=.false.,             &
+                     act='store_true',             &
+                     def='.false.',                &
+                     group='postprocess',          &
+                     error=error)
+   if (error/=0) stop
+
+   call self%cli%add(switch='--liutex',           &
+                     help='compute liutex field', &
                      required=.false.,             &
                      act='store_true',             &
                      def='.false.',                &

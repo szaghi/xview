@@ -31,9 +31,9 @@ contains
    call self%block_esz%destroy
    endsubroutine destroy
 
-   subroutine load_file(self,filename,file_ptc,is_cell_centered,patch,RE,rFR2,zfs,is_level_set,is_zeroeq,is_oneeq,is_twoeq, &
-                        compute_metrics,compute_lambda2,compute_qfactor,compute_helicity,compute_vorticity,                 &
-                        compute_div2LT,compute_grad_p,compute_k_ratio,compute_yplus,compute_tau,compute_div_tau,            &
+   subroutine load_file(self,filename,file_ptc,is_cell_centered,patch,RE,rFR2,zfs,is_level_set,is_zeroeq,is_oneeq,is_twoeq,  &
+                        compute_metrics,compute_lambda2,compute_qfactor, compute_liutex, compute_helicity,compute_vorticity, &
+                        compute_div2LT,compute_grad_p,compute_k_ratio,compute_yplus,compute_tau,compute_div_tau,             &
                         compute_loads,verbose)
    !< Load file.
    class(file_esz_object), intent(inout)        :: self              !< File data.
@@ -51,6 +51,7 @@ contains
    logical,                intent(in), optional :: compute_metrics   !< Compute metrics.
    logical,                intent(in), optional :: compute_lambda2   !< Compute lamda2 field.
    logical,                intent(in), optional :: compute_qfactor   !< Compute qfactor field.
+   logical,                intent(in), optional :: compute_liutex    !< Compute qfactor field.
    logical,                intent(in), optional :: compute_helicity  !< Compute helicity field.
    logical,                intent(in), optional :: compute_vorticity !< Compute vorticity field.
    logical,                intent(in), optional :: compute_grad_p    !< Compute gradient pressure.
@@ -80,6 +81,7 @@ contains
                                         is_twoeq=is_twoeq,                   &
                                         compute_lambda2=compute_lambda2,     &
                                         compute_qfactor=compute_qfactor,     &
+                                        compute_liutex=compute_liutex,       &
                                         compute_helicity=compute_helicity,   &
                                         compute_vorticity=compute_vorticity, &
                                         compute_div2LT=compute_div2LT,       &

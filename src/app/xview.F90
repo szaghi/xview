@@ -313,6 +313,7 @@ contains
                                                         is_cell_centered=ui%is_cell_centered,   &
                                                         compute_lambda2=ui%compute_lambda2,     &
                                                         compute_qfactor=ui%compute_qfactor,     &
+                                                        compute_liutex=ui%compute_liutex,       &
                                                         compute_helicity=ui%compute_helicity,   &
                                                         compute_vorticity=ui%compute_vorticity, &
                                                         compute_grad_p=ui%compute_grad_p,       &
@@ -411,6 +412,7 @@ contains
                                     is_cell_centered=ui%is_cell_centered,   &
                                     compute_lambda2=ui%compute_lambda2,     &
                                     compute_qfactor=ui%compute_qfactor,     &
+                                    compute_liutex=ui%compute_liutex,       &
                                     compute_helicity=ui%compute_helicity,   &
                                     compute_vorticity=ui%compute_vorticity, &
                                     compute_grad_p=ui%compute_grad_p,       &
