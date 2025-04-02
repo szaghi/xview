@@ -135,7 +135,7 @@ contains
    self%has_grad_p    =.false.
    self%has_k_ratio   =.false.
    self%has_loads     =.false.
-   self%is_loaded     = .false.
+   self%is_loaded     =.false.
    endsubroutine destroy
 
    elemental subroutine alloc(self)
@@ -617,14 +617,14 @@ contains
    integer(I4P)                           :: i,j,k,ii,jj,kk,iter               !< Counter.
    real(R8P), parameter                   :: EPS6=1d-6, EPS9=1d-9, EPS12=1d-12 !< Tolerances.
    ! Variables for liutex method
-   !real(R8P)                              :: r_hat                             !< Dummy variable for liutex method.
+   real(R8P)                              :: norm_r_star                       !< Dummy variable for liutex method.
    real(R8P)                              :: w_dot_r                           !< Dummy variable for liutex method.
-   real(R8P), dimension(3)                :: eig_vec_r                         !< Dummy variable for liutex method.
+   real(R8P), dimension(3)                :: eig_vec_r, r_star                 !< Dummy variable for liutex method.
    real(R8P), dimension(3,3)              :: r_liutex                          !< Dummy variable for liutex method.
    real(R8P)                              :: aa, b                             !< Dummy variable for liutex method.
-   real(R8P)                              :: delta                             !< Dummy variable for liutex method.
+   real(R8P)                              :: delta, delta1, delta2, delta3     !< Dummy variable for liutex method.
    real(R8P)                              :: eig3r                             !< Dummy variable for liutex method.
-   complex(R8P)                           :: eig1c                             !< Dummy variable for liutex method.
+   complex(R8P)                           :: eig1c, eig2c                      !< Dummy variable for liutex method.
    associate(Ni=>grd%Ni,Nj=>grd%Nj,Nk=>grd%Nk,gc=>grd%gc, &
              momentum=>self%momentum,lambda2=>self%lambda2,qfactor=>self%qfactor,helicity=>self%helicity,vorticity=>self%vorticity)
    ! print '(A)', 'compute vorticity'
@@ -708,26 +708,61 @@ contains
                                   + gv(1,3,i,j,k)*(gv(2,1,i,j,k)*gv(3,2,i,j,k)-gv(2,2,i,j,k)*gv(3,1,i,j,k)))
                   c(2)          = -(gv(1,1,i,j,k) + gv(2,2,i,j,k) + gv(3,3,i,j,k))
                   c(1)          = -0.5_R8P*(tt(1,1) + tt(2,2) + tt(3,3) - (c(2))**2)
-                  mu            = sqrt(c(2)**2 - 3._R8P*c(1))
                   delta         = 18._R8P*c(1)*c(2)*c(0) - 4._R8P*c(2)**3 * c(0) + c(1)**2 * c(2)**2 - 4._R8P*c(1)**3 - 27._R8P*c(0)**2
-                  delta         = -delta / 108._R8P
+                  delta         = -delta/108._R8P
                   liutex(i,j,k) = 0._R8P  
-                  if (delta.gt.0._R8P) then
+                  if (delta>0._R8P) then
+                     mu = c(2)**2 - 3._R8P*c(1)/9._R8P
                      t  = (2._R8P*c(2)**3 - 9._R8P*c(1)*c(2) + 27._R8P*c(0)) / 54._R8P
                      aa = -sign(1._R8P, t) * ( abs(t) + sqrt(delta) )**(1._R8P/3._R8P)
-                     if (aa.eq.0._R8P) then
+                     if (aa==0._R8P) then
                          b = 0._R8P
                      else
                          b = mu / aa
                      endif
-                     eig1c        = cmplx(-0.5_R8P*(aa+b) - c(2)/3._R8P, 0.5_R8P*sqrt(3._R8P)*(aa-b))
-                     eig3r        = aa + b - c(2)/3._R8P
-                     eig_vec_r(1) = (gv(1,2,i,j,k)* gv(2,3,i,j,k)-gv(1,1,i,j,k)*(gv(2,2,i,j,k)-eig3r))
-                     eig_vec_r(2) = (gv(1,3,i,j,k)* gv(2,1,i,j,k)-gv(1,1,i,j,k)* gv(2,3,i,j,k))
-                     eig_vec_r(3) = (gv(1,1,i,j,k)*(gv(2,2,i,j,k)-eig3r)-gv(1,2,i,j,k)*gv(2,1,i,j,k))
-                     eig_vec_r    = eig_vec_r / norm2(eig_vec_r)
+                     eig1c  = cmplx(-0.5_R8P*(aa+b) - c(2)/3._R8P, 0.5_R8P*sqrt(3._R8P)*(aa-b))
+                     eig2c  = cmplx(real(eig1c), -aimag(eig1c)) 
+                     eig3r  = aa + b - c(2)/3._R8P
+                     delta1 = (gv(1,1,i,j,k) - eig3r) * (gv(2,2,i,j,k) - eig3r) - gv(2,1,i,j,k)*gv(1,2,i,j,k)
+                     delta2 = (gv(2,2,i,j,k) - eig3r) * (gv(3,3,i,j,k) - eig3r) - gv(2,3,i,j,k)*gv(3,2,i,j,k)
+                     delta3 = (gv(1,1,i,j,k) - eig3r) * (gv(3,3,i,j,k) - eig3r) - gv(1,3,i,j,k)*gv(3,1,i,j,k)
+
+                     if (delta1 == 0._R8P .and. delta2 == 0._R8P .and. delta3 == 0._R8P) then
+                        stop
+                     end if
+                  
+                     if (abs(delta1) >= abs(delta2) .and. abs(delta1) >= abs(delta3)) then
+                     
+                        r_star(1) = (-(gv(2,2,i,j,k)-eig3r)*a(1,3,i,j,k) + gv(1,2,i,j,k)*gv(2,3,i,j,k)) / delta1
+                        r_star(2) = (  gv(2,1,i,j,k)*gv(1,3,i,j,k) - (gv(1,1,i,j,k)-eig3r)*gv(2,3,i,j,k)) / delta1
+                        r_star(3) = 1._R8P
+                     
+                     else if (abs(delta2) >= abs(delta1) .and. abs(delta2) >= abs(delta3)) then
+                     
+                        r_star(1) = 1._R8P
+                        r_star(2) = (-(gv(3,3,i,j,k)-eig3r)*gv(2,1,i,j,k) + gv(2,3,i,j,k)*gv(3,1,i,j,k))/ delta2
+                        r_star(3) = (  gv(3,2,i,j,k)*gv(2,1,i,j,k)-(gv(2,2,i,j,k)-eig3r)*gv(3,1,i,j,k)) / delta2
+                     
+                     else if (abs(delta3) >= abs(delta1) .and. abs(delta3) >= abs(delta2)) then
+                     
+                        r_star(1) = (-(gv(3,3)-eig3r)*gv(1,2)+gv(1,3,i,j,k)*gv(3,2,i,j,k))/delta3
+                        r_star(2) = 1._R8P
+                        r_star(3) = ( gv(3,1,i,j,k)*gv(1,2,i,j,k) - (gv(1,1,i,j,k)-eig3r)*gv(3,2,i,j,k))/delta3
+                     
+                     else
+                         stop
+                     end if
+
+                     !eig_vec_r(1) = (gv(1,2,i,j,k)* gv(2,3,i,j,k)-gv(1,1,i,j,k)*(gv(2,2,i,j,k)-eig3r))
+                     !eig_vec_r(2) = (gv(1,3,i,j,k)* gv(2,1,i,j,k)-gv(1,1,i,j,k)* gv(2,3,i,j,k))
+                     !eig_vec_r(3) = (gv(1,1,i,j,k)*(gv(2,2,i,j,k)-eig3r)-gv(1,2,i,j,k)*gv(2,1,i,j,k))
+                     !eig_vec_r    = eig_vec_r / norm2(eig_vec_r)
+                     norm_r_star = sqrt(r_star(1)**2 + r_star(2)**2 + r_star(3)**2)
+                     eig_vec_r(1) = r_star(1) / norm_r_star
+                     eig_vec_r(2) = r_star(2) / norm_r_star
+                     eig_vec_r(3) = r_star(3) / norm_r_star
                      aa           = dot_product(vorticity(i,j,k), eig_vec_r)
-                     if (aa.le.0._R8P) then
+                     if (aa<=0._R8P) then
                         r_liutex = - eig_vec_r
                      else
                         r_liutex = + eig_vec_r
