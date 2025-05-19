@@ -50,6 +50,7 @@ type :: block_rst_object
    logical                   :: has_lambda2=.false.                         !< Solution has lamda2 field.
    logical                   :: has_qfactor=.false.                         !< Solution has qfactor field.
    logical                   :: has_helicity=.false.                        !< Solution has helicity field.
+   logical                   :: has_liutex=.false.                          !< Solution has liutex field.
    logical                   :: has_vorticity=.false.                       !< Solution has vorticity field.
    logical                   :: has_div2LT=.false.                          !< Solution has double divergence of Lighthill tensor.
    logical                   :: has_grad_p=.false.                          !< Solution has pressure gradient field.
@@ -160,8 +161,14 @@ contains
    ! auxiliary variables
    if (self%has_lambda2  ) allocate(self%lambda2(  1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
    if (self%has_qfactor  ) allocate(self%qfactor(  1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
-   if (self%has_liutex   ) allocate(self%liutex(   1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
-   if (self%has_helicity ) allocate(self%helicity( 1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
+   if (self%has_liutex   ) then
+      allocate(self%vorticity(1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
+      allocate(self%liutex(   1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
+   endif
+   if (self%has_helicity ) then
+      allocate(self%vorticity(1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
+      allocate(self%helicity( 1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
+   endif
    if (self%has_vorticity) allocate(self%vorticity(1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
    if (self%has_div2LT   ) allocate(self%div2LT(   1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
    if (self%has_grad_p   ) allocate(self%grad_p(   1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
@@ -619,24 +626,25 @@ contains
    ! Variables for liutex method
    real(R8P)                              :: norm_r_star                       !< Dummy variable for liutex method.
    real(R8P)                              :: w_dot_r                           !< Dummy variable for liutex method.
-   real(R8P), dimension(3)                :: eig_vec_r, r_star                 !< Dummy variable for liutex method.
-   real(R8P), dimension(3,3)              :: r_liutex                          !< Dummy variable for liutex method.
-   real(R8P)                              :: aa, b                             !< Dummy variable for liutex method.
+   real(R8P), dimension(3)                :: eig_vec_r, r_star, r_liutex       !< Dummy variable for liutex method.
+   real(R8P), dimension(3,3)              :: tt                                !< Dummy variable for liutex method.
+   real(R8P)                              :: aa, b, t, dummy                   !< Dummy variable for liutex method.
    real(R8P)                              :: delta, delta1, delta2, delta3     !< Dummy variable for liutex method.
    real(R8P)                              :: eig3r                             !< Dummy variable for liutex method.
    complex(R8P)                           :: eig1c, eig2c                      !< Dummy variable for liutex method.
    associate(Ni=>grd%Ni,Nj=>grd%Nj,Nk=>grd%Nk,gc=>grd%gc, &
-             momentum=>self%momentum,lambda2=>self%lambda2,qfactor=>self%qfactor,helicity=>self%helicity,vorticity=>self%vorticity)
+             momentum=>self%momentum,lambda2=>self%lambda2,qfactor=>self%qfactor, liutex=>self%liutex, &
+             helicity=>self%helicity,vorticity=>self%vorticity)
    ! print '(A)', 'compute vorticity'
    call grd%compute_gradient(var=momentum, gv=gv)
-   if (self%has_helicity.or.self%has_vorticity) then
+   if (self%has_helicity.or.self%has_vorticity.or.self%has_liutex) then
       ! compute vorticity vector
       do k=0,Nk+1
          do j=0,Nj+1
             do i=0,Ni+1
-               vorticity%x =  (gv(3,2,i,j,k) - gv(2,3,i,j,k))
-               vorticity%y = -(gv(1,3,i,j,k) - gv(3,1,i,j,k))
-               vorticity%z =  (gv(2,1,i,j,k) - gv(1,2,i,j,k))
+               vorticity(i,j,k)%x =  (gv(3,2,i,j,k) - gv(2,3,i,j,k))
+               vorticity(i,j,k)%y = -(gv(1,3,i,j,k) - gv(3,1,i,j,k))
+               vorticity(i,j,k)%z =  (gv(2,1,i,j,k) - gv(1,2,i,j,k))
             enddo
          enddo
       enddo
@@ -707,68 +715,65 @@ contains
                                   - gv(1,2,i,j,k)*(gv(2,1,i,j,k)*gv(3,3,i,j,k)-gv(2,3,i,j,k)*gv(3,1,i,j,k)) &
                                   + gv(1,3,i,j,k)*(gv(2,1,i,j,k)*gv(3,2,i,j,k)-gv(2,2,i,j,k)*gv(3,1,i,j,k)))
                   c(2)          = -(gv(1,1,i,j,k) + gv(2,2,i,j,k) + gv(3,3,i,j,k))
-                  c(1)          = -0.5_R8P*(tt(1,1) + tt(2,2) + tt(3,3) - (c(2))**2)
+                  c(1)          = -0.5_R8P*(tt(1,1) + tt(2,2) + tt(3,3) - (gv(1,1,i,j,k) + gv(2,2,i,j,k) + gv(3,3,i,j,k))**2)
                   delta         = 18._R8P*c(1)*c(2)*c(0) - 4._R8P*c(2)**3 * c(0) + c(1)**2 * c(2)**2 - 4._R8P*c(1)**3 - 27._R8P*c(0)**2
                   delta         = -delta/108._R8P
+                  r_liutex      = 0._R8P
                   liutex(i,j,k) = 0._R8P  
-                  if (delta>0._R8P) then
-                     mu = c(2)**2 - 3._R8P*c(1)/9._R8P
-                     t  = (2._R8P*c(2)**3 - 9._R8P*c(1)*c(2) + 27._R8P*c(0)) / 54._R8P
-                     aa = -sign(1._R8P, t) * ( abs(t) + sqrt(delta) )**(1._R8P/3._R8P)
-                     if (aa==0._R8P) then
+                    if (delta>0._R8P) then
+                      mu = c(2)**2 - 3._R8P*c(1)/9._R8P
+                      t  = (2._R8P*c(2)**3 - 9._R8P*c(1)*c(2) + 27._R8P*c(0)) / 54._R8P
+                      aa = -sign(1._R8P, t) * ( abs(t) + sqrt(delta) )**(1._R8P/3._R8P)
+                      if (aa==0._R8P) then
                          b = 0._R8P
-                     else
+                      else
                          b = mu / aa
-                     endif
-                     eig1c  = cmplx(-0.5_R8P*(aa+b) - c(2)/3._R8P, 0.5_R8P*sqrt(3._R8P)*(aa-b))
-                     eig2c  = cmplx(real(eig1c), -aimag(eig1c)) 
-                     eig3r  = aa + b - c(2)/3._R8P
-                     delta1 = (gv(1,1,i,j,k) - eig3r) * (gv(2,2,i,j,k) - eig3r) - gv(2,1,i,j,k)*gv(1,2,i,j,k)
-                     delta2 = (gv(2,2,i,j,k) - eig3r) * (gv(3,3,i,j,k) - eig3r) - gv(2,3,i,j,k)*gv(3,2,i,j,k)
-                     delta3 = (gv(1,1,i,j,k) - eig3r) * (gv(3,3,i,j,k) - eig3r) - gv(1,3,i,j,k)*gv(3,1,i,j,k)
+                      endif
+                      eig1c= cmplx(-0.5_R8P*(aa+b) - c(2)/3._R8P, 0.5_R8P*sqrt(3._R8P)*(aa-b))
+                      eig2c= cmplx(real(eig1c), -aimag(eig1c)) 
+                      eig3r= aa + b - c(2)/3._R8P
+                      delta1=(gv(1,1,i,j,k)-eig3r)*(gv(2,2,i,j,k)-eig3r)-gv(2,1,i,j,k)*gv(1,2,i,j,k)
+                      delta2=(gv(2,2,i,j,k)-eig3r)*(gv(3,3,i,j,k)-eig3r)-gv(2,3,i,j,k)*gv(3,2,i,j,k)
+                      delta3=(gv(1,1,i,j,k)-eig3r)*(gv(3,3,i,j,k)-eig3r)-gv(1,3,i,j,k)*gv(3,1,i,j,k)
 
-                     if (delta1 == 0._R8P .and. delta2 == 0._R8P .and. delta3 == 0._R8P) then
+                      if (delta1 == 0._R8P .and. delta2 == 0._R8P .and. delta3 == 0._R8P) then
                         stop
-                     end if
-                  
-                     if (abs(delta1) >= abs(delta2) .and. abs(delta1) >= abs(delta3)) then
-                     
-                        r_star(1) = (-(gv(2,2,i,j,k)-eig3r)*a(1,3,i,j,k) + gv(1,2,i,j,k)*gv(2,3,i,j,k)) / delta1
-                        r_star(2) = (  gv(2,1,i,j,k)*gv(1,3,i,j,k) - (gv(1,1,i,j,k)-eig3r)*gv(2,3,i,j,k)) / delta1
-                        r_star(3) = 1._R8P
-                     
-                     else if (abs(delta2) >= abs(delta1) .and. abs(delta2) >= abs(delta3)) then
-                     
-                        r_star(1) = 1._R8P
-                        r_star(2) = (-(gv(3,3,i,j,k)-eig3r)*gv(2,1,i,j,k) + gv(2,3,i,j,k)*gv(3,1,i,j,k))/ delta2
-                        r_star(3) = (  gv(3,2,i,j,k)*gv(2,1,i,j,k)-(gv(2,2,i,j,k)-eig3r)*gv(3,1,i,j,k)) / delta2
-                     
-                     else if (abs(delta3) >= abs(delta1) .and. abs(delta3) >= abs(delta2)) then
-                     
-                        r_star(1) = (-(gv(3,3)-eig3r)*gv(1,2)+gv(1,3,i,j,k)*gv(3,2,i,j,k))/delta3
-                        r_star(2) = 1._R8P
-                        r_star(3) = ( gv(3,1,i,j,k)*gv(1,2,i,j,k) - (gv(1,1,i,j,k)-eig3r)*gv(3,2,i,j,k))/delta3
-                     
-                     else
+                      end if
+                    
+                      if (abs(delta1) >= abs(delta2) .and. abs(delta1) >= abs(delta3)) then
+                      
+                        r_star(1)=(-(gv(2,2,i,j,k)-eig3r)*gv(1,3,i,j,k) + gv(1,2,i,j,k)*gv(2,3,i,j,k))/delta1
+                        r_star(2)=(  gv(2,1,i,j,k)*gv(1,3,i,j,k)-(gv(1,1,i,j,k)-eig3r)*gv(2,3,i,j,k))/delta1
+                        r_star(3)=1._R8P
+                      
+                      else if (abs(delta2) >= abs(delta1) .and. abs(delta2) >= abs(delta3)) then
+                      
+                        r_star(1)=1._R8P
+                        r_star(2)=(-(gv(3,3,i,j,k)-eig3r)*gv(2,1,i,j,k)+gv(2,3,i,j,k)*gv(3,1,i,j,k))/delta2
+                        r_star(3)=(  gv(3,2,i,j,k)*gv(2,1,i,j,k)-(gv(2,2,i,j,k)-eig3r)*gv(3,1,i,j,k))/delta2
+                      
+                      else if (abs(delta3) >= abs(delta1) .and. abs(delta3) >= abs(delta2)) then
+                      
+                        r_star(1)=(-(gv(3,3,i,j,k)-eig3r)*gv(1,2,i,j,k)+gv(1,3,i,j,k)*gv(3,2,i,j,k))/delta3
+                        r_star(2)=1._R8P
+                        r_star(3)=( gv(3,1,i,j,k)*gv(1,2,i,j,k)-(gv(1,1,i,j,k)-eig3r)*gv(3,2,i,j,k))/delta3
+                      
+                      else
                          stop
-                     end if
+                      end if
 
-                     !eig_vec_r(1) = (gv(1,2,i,j,k)* gv(2,3,i,j,k)-gv(1,1,i,j,k)*(gv(2,2,i,j,k)-eig3r))
-                     !eig_vec_r(2) = (gv(1,3,i,j,k)* gv(2,1,i,j,k)-gv(1,1,i,j,k)* gv(2,3,i,j,k))
-                     !eig_vec_r(3) = (gv(1,1,i,j,k)*(gv(2,2,i,j,k)-eig3r)-gv(1,2,i,j,k)*gv(2,1,i,j,k))
-                     !eig_vec_r    = eig_vec_r / norm2(eig_vec_r)
-                     norm_r_star = sqrt(r_star(1)**2 + r_star(2)**2 + r_star(3)**2)
-                     eig_vec_r(1) = r_star(1) / norm_r_star
-                     eig_vec_r(2) = r_star(2) / norm_r_star
-                     eig_vec_r(3) = r_star(3) / norm_r_star
-                     aa           = dot_product(vorticity(i,j,k), eig_vec_r)
-                     if (aa<=0._R8P) then
+                      norm_r_star  = sqrt(r_star(1)**2 + r_star(2)**2 + r_star(3)**2)
+                      eig_vec_r(1) = r_star(1)/norm_r_star
+                      eig_vec_r(2) = r_star(2)/norm_r_star
+                      eig_vec_r(3) = r_star(3)/norm_r_star
+                      dummy = vorticity(i,j,k)%x * eig_vec_r(1) + vorticity(i,j,k)%y * eig_vec_r(2) + vorticity(i,j,k)%z * eig_vec_r(3)
+                      if (dummy<=0._R8P) then
                         r_liutex = - eig_vec_r
-                     else
-                        r_liutex = + eig_vec_r
-                     endif
-                     w_dot_r       = dot_product(vorticity(i,j,k), r_liutex)
-                     liutex(i,j,k) = w_dot_r - sqrt(w_dot_r**2 - 4._R8P*aimag(eig1c)**2)
+                      else
+                        r_liutex = + eig_vec_r                                          
+                      endif
+                      w_dot_r       = vorticity(i,j,k)%x * r_liutex(1) + vorticity(i,j,k)%y * r_liutex(2) + vorticity(i,j,k)%z * r_liutex(3)
+                      liutex(i,j,k) = w_dot_r - sqrt(w_dot_r**2 + 4._R8P*aimag(eig1c)**2)
                   endif
                endif
             enddo
@@ -933,9 +938,9 @@ contains
    has_viscosity = allocated(self%viscosity)
    endfunction has_viscosity
 
-   subroutine init(self, Ni, Nj, Nk, gc, is_level_set, is_zeroeq, is_oneeq, is_twoeq,             &
-                   has_lambda2, has_qfactor, has_helicity, has_vorticity, has_div2LT, has_grad_p, &
-                   has_k_ratio,                                                                   &
+   subroutine init(self, Ni, Nj, Nk, gc, is_level_set, is_zeroeq, is_oneeq, is_twoeq,  &
+                   has_lambda2, has_qfactor, has_helicity, has_liutex,                 &
+                   has_vorticity, has_div2LT, has_grad_p, has_k_ratio,                 &
                    has_yplus, has_tau, has_div_tau, has_loads)
    !< Initialize block.
    class(block_rst_object), intent(inout)        :: self          !< Block data.
@@ -1056,7 +1061,7 @@ contains
 
    subroutine load_dimensions(self, file_unit, is_level_set, is_zeroeq, is_oneeq, is_twoeq,                     &
                               compute_lambda2,compute_qfactor,compute_helicity,compute_vorticity,compute_div2LT,&
-                              compute_grad_p,computex_liutex, compute_k_ratio,                                                   &
+                              compute_grad_p,compute_liutex, compute_k_ratio,                                                   &
                               compute_yplus,compute_tau,compute_div_tau,compute_loads)
    !< Load block dimensions from file.
    !<
