@@ -158,18 +158,14 @@ contains
       allocate(self%turbulent_kinetic_energy(1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
       allocate(self%turbulent_kinetic_energy_dissipation(1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
    endif
+   if (self%has_vorticity.or.self%has_lambda2.or.self%has_lambda2.or.self%has_liutex.or.self%has_helicity) then
+      allocate(self%vorticity(1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
+   endif
    ! auxiliary variables
    if (self%has_lambda2  ) allocate(self%lambda2(  1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
    if (self%has_qfactor  ) allocate(self%qfactor(  1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
-   if (self%has_liutex   ) then
-      allocate(self%vorticity(1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
-      allocate(self%liutex(   1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
-   endif
-   if (self%has_helicity ) then
-      allocate(self%vorticity(1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
-      allocate(self%helicity( 1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
-   endif
-   if (self%has_vorticity) allocate(self%vorticity(1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
+   if (self%has_liutex   ) allocate(self%liutex(   1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
+   if (self%has_helicity ) allocate(self%helicity( 1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
    if (self%has_div2LT   ) allocate(self%div2LT(   1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
    if (self%has_grad_p   ) allocate(self%grad_p(   1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
    if (self%has_k_ratio  ) allocate(self%k_ratio(  1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
@@ -716,7 +712,7 @@ contains
                                   + gv(1,3,i,j,k)*(gv(2,1,i,j,k)*gv(3,2,i,j,k)-gv(2,2,i,j,k)*gv(3,1,i,j,k)))
                   c(2)          = -(gv(1,1,i,j,k) + gv(2,2,i,j,k) + gv(3,3,i,j,k))
                   c(1)          = -0.5_R8P*(tt(1,1) + tt(2,2) + tt(3,3) - (gv(1,1,i,j,k) + gv(2,2,i,j,k) + gv(3,3,i,j,k))**2)
-                  delta         = 18._R8P*c(1)*c(2)*c(0) - 4._R8P*c(2)**3 * c(0) + c(1)**2 * c(2)**2 - 4._R8P*c(1)**3 - 27._R8P*c(0)**2
+                  delta         = 18._R8P*c(1)*c(2)*c(0)-4._R8P*c(2)**3*c(0)+c(1)**2*c(2)**2-4._R8P*c(1)**3-27._R8P*c(0)**2
                   delta         = -delta/108._R8P
                   r_liutex      = 0._R8P
                   liutex(i,j,k) = 0._R8P  
@@ -766,13 +762,13 @@ contains
                       eig_vec_r(1) = r_star(1)/norm_r_star
                       eig_vec_r(2) = r_star(2)/norm_r_star
                       eig_vec_r(3) = r_star(3)/norm_r_star
-                      dummy = vorticity(i,j,k)%x * eig_vec_r(1) + vorticity(i,j,k)%y * eig_vec_r(2) + vorticity(i,j,k)%z * eig_vec_r(3)
+                      dummy = vorticity(i,j,k)%x*eig_vec_r(1)+vorticity(i,j,k)%y*eig_vec_r(2)+vorticity(i,j,k)%z*eig_vec_r(3)
                       if (dummy<=0._R8P) then
                         r_liutex = - eig_vec_r
                       else
                         r_liutex = + eig_vec_r                                          
                       endif
-                      w_dot_r       = vorticity(i,j,k)%x * r_liutex(1) + vorticity(i,j,k)%y * r_liutex(2) + vorticity(i,j,k)%z * r_liutex(3)
+                      w_dot_r       = vorticity(i,j,k)%x*r_liutex(1)+vorticity(i,j,k)%y*r_liutex(2)+vorticity(i,j,k)%z*r_liutex(3)
                       liutex(i,j,k) = w_dot_r - sqrt(w_dot_r**2 + 4._R8P*aimag(eig1c)**2)
                   endif
                endif
