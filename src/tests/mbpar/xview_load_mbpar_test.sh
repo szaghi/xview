@@ -1,3 +1,3 @@
 #!/bin/bash
 
-xview --mbpar mb.par
+../../../bin/xview --mbpar mb.par

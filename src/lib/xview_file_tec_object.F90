@@ -9,8 +9,6 @@ use stringifor
 use xview_block_grd_object
 use xview_block_icc_object
 use xview_block_rst_object
-use xview_file_icc_object
-use xview_file_rst_object
 
 implicit none
 private
@@ -70,17 +68,20 @@ contains
    endif
    endsubroutine finalize
 
-   subroutine initialize(self, path, file_name, is_binary, is_cell_centered, file_icc, file_sol)
+   subroutine initialize(self, path, file_name, is_binary, is_cell_centered, icc, sol)
    !< Initialize file.
-   class(file_tec_object), intent(inout) :: self             !< File data.
-   character(*),           intent(in)    :: path             !< Output path.
-   character(*),           intent(in)    :: file_name        !< File name.
-   logical,                intent(in)    :: is_binary        !< Define binary or ascii output.
-   logical,                intent(in)    :: is_cell_centered !< Define variables at cell centers or nodes.
-   type(file_icc_object),  intent(in)    :: file_icc         !< File icc data.
-   type(file_rst_object),  intent(in)    :: file_sol         !< File sol data.
-   character(1)                          :: vd               !< Variables delimiter, '"' or ''.
-   integer(I4P)                          :: error            !< Error status.
+   !<
+   !< @note Variables names are built from the same `allocated` checks of `save_block_file_tec`, in the same order: any field
+   !< added there must be added here too.
+   class(file_tec_object), intent(inout)        :: self             !< File data.
+   character(*),           intent(in)           :: path             !< Output path.
+   character(*),           intent(in)           :: file_name        !< File name.
+   logical,                intent(in)           :: is_binary        !< Define binary or ascii output.
+   logical,                intent(in)           :: is_cell_centered !< Define variables at cell centers or nodes.
+   type(block_icc_object), intent(in), optional :: icc              !< Representative icc block.
+   type(block_rst_object), intent(in), optional :: sol              !< Representative sol block.
+   character(1)                                 :: vd               !< Variables delimiter, '"' or ''.
+   integer(I4P)                                 :: error            !< Error status.
 
    call self%destroy
    self%path      = trim(adjustl(path))
@@ -92,44 +93,35 @@ contains
       vd = '"'
       self%tecvarname = ' VARIABLES ="x" "y" "z"'
    endif
-   if (file_icc%is_loaded) then
-      self%nvar = self%nvar + 1
-      self%tecvarname = self%tecvarname//' '//trim(vd)//'icc'//trim(vd)
+   if (present(icc)) then
+      if (icc%is_loaded) call add_var('icc')
    endif
-   if (file_sol%is_loaded) then
-      self%nvar = self%nvar + 4
-      self%tecvarname = self%tecvarname//' '//trim(vd)//'u'//trim(vd)
-      self%tecvarname = self%tecvarname//' '//trim(vd)//'v'//trim(vd)
-      self%tecvarname = self%tecvarname//' '//trim(vd)//'w'//trim(vd)
-      self%tecvarname = self%tecvarname//' '//trim(vd)//'p'//trim(vd)
-      if (file_sol%blocks(1)%is_level_set) then
-         self%nvar = self%nvar + 2 ! f and f0 must be saved
-         self%tecvarname = self%tecvarname//' '//trim(vd)//'f'//trim(vd)
-         self%tecvarname = self%tecvarname//' '//trim(vd)//'f0'//trim(vd)
+   if (present(sol)) then
+      if (sol%is_loaded) then
+         call add_var('u') ; call add_var('v') ; call add_var('w') ; call add_var('p')
+         if (allocated(sol%level_set                           )) call add_var('f')
+         if (allocated(sol%level_set_zero                      )) call add_var('f0')
+         if (allocated(sol%viscosity                           )) call add_var('visc')
+         if (allocated(sol%turbulent_viscosity                 )) call add_var('vitl')
+         if (allocated(sol%turbulent_kinetic_energy            )) call add_var('ken')
+         if (allocated(sol%turbulent_kinetic_energy_dissipation)) call add_var('eps')
+         if (allocated(sol%lambda2                             )) call add_var('lambda2')
+         if (allocated(sol%qfactor                             )) call add_var('qfactor')
+         if (allocated(sol%liutex                              )) call add_var('liutex')
+         if (allocated(sol%helicity                            )) call add_var('helicity')
+         if (allocated(sol%vorticity)) then
+            call add_var('vorticity_x') ; call add_var('vorticity_y') ; call add_var('vorticity_z')
+         endif
+         if (allocated(sol%grad_p)) then
+            call add_var('grad_p_x') ; call add_var('grad_p_y') ; call add_var('grad_p_z')
+         endif
+         if (allocated(sol%LT)) then
+            call add_var('LT_11') ; call add_var('LT_12') ; call add_var('LT_13')
+            call add_var('LT_21') ; call add_var('LT_22') ; call add_var('LT_23')
+            call add_var('LT_31') ; call add_var('LT_32') ; call add_var('LT_33')
+         endif
+         if (allocated(sol%div2LT                              )) call add_var('div2LT')
       endif
-      if (file_sol%blocks(1)%is_zeroeq) then
-         self%nvar = self%nvar + 1 ! visc must be saved
-         self%tecvarname = self%tecvarname//' '//trim(vd)//'visc'//trim(vd)
-      elseif (file_sol%blocks(1)%is_oneeq) then
-         self%nvar = self%nvar + 2 ! visc and vitl must be saved
-         self%tecvarname = self%tecvarname//' '//trim(vd)//'visc'//trim(vd)
-         self%tecvarname = self%tecvarname//' '//trim(vd)//'vitl'//trim(vd)
-      elseif (file_sol%blocks(1)%is_twoeq) then
-         self%nvar = self%nvar + 3 ! visc, ken and eps must be saved
-         self%tecvarname = self%tecvarname//' '//trim(vd)//'visc'//trim(vd)
-         self%tecvarname = self%tecvarname//' '//trim(vd)//'ken'//trim(vd)
-         self%tecvarname = self%tecvarname//' '//trim(vd)//'eps'//trim(vd)
-      endif
-      ! if (save_aux) then
-      !    self%nvar = self%nvar + 7 ! lamda2, qfactor, helicity, vorticity(x,y,z), div2LT
-      !    self%tecvarname = self%tecvarname//' '//trim(vd)//'lambda2'//trim(vd)
-      !    self%tecvarname = self%tecvarname//' '//trim(vd)//'qfactor'//trim(vd)
-      !    self%tecvarname = self%tecvarname//' '//trim(vd)//'helicity'//trim(vd)
-      !    self%tecvarname = self%tecvarname//' '//trim(vd)//'vorticity_x'//trim(vd)
-      !    self%tecvarname = self%tecvarname//' '//trim(vd)//'vorticity_y'//trim(vd)
-      !    self%tecvarname = self%tecvarname//' '//trim(vd)//'vorticity_z'//trim(vd)
-      !    self%tecvarname = self%tecvarname//' '//trim(vd)//'div2LT'//trim(vd)
-      ! endif
    endif
    allocate(self%tecnull(  1:self%nvar))
    allocate(self%tecvarloc(1:self%nvar))
@@ -144,6 +136,14 @@ contains
      open(newunit=self%file_unit, file=self%path//self%file_name//".dat")
      write(self%file_unit, '(A)', iostat=error)self%tecvarname
    endif
+   contains
+      subroutine add_var(name)
+      !< Add a variable to the header names list.
+      character(*), intent(in) :: name !< Variable name.
+
+      self%tecvarname = self%tecvarname//' '//trim(vd)//name//trim(vd)
+      self%nvar = self%nvar + 1
+      endsubroutine add_var
    endsubroutine initialize
 
    function is_file_present(self) result(is_present)
@@ -261,31 +261,49 @@ contains
                error = tec_var(n=ncn, var=sol%momentum(i1:i2,j1:j2,k1:k2)%y, d=1_I4P)
                error = tec_var(n=ncn, var=sol%momentum(i1:i2,j1:j2,k1:k2)%z, d=1_I4P)
                error = tec_var(n=ncn, var=sol%pressure(i1:i2,j1:j2,k1:k2),   d=1_I4P)
-               if (sol%has_level_set()) then
-                  error = tec_var(n=ncn, var=sol%level_set(     i1:i2,j1:j2,k1:k2), d=1_I4P)
+               if (allocated(sol%level_set)) &
+                  error = tec_var(n=ncn, var=sol%level_set(i1:i2,j1:j2,k1:k2), d=1_I4P)
+               if (allocated(sol%level_set_zero)) &
                   error = tec_var(n=ncn, var=sol%level_set_zero(i1:i2,j1:j2,k1:k2), d=1_I4P)
+               if (allocated(sol%viscosity)) &
+                  error=tec_var(n=ncn, var=sol%viscosity(i1:i2,j1:j2,k1:k2), d=1_I4P)
+               if (allocated(sol%turbulent_viscosity)) &
+                  error=tec_var(n=ncn, var=sol%turbulent_viscosity(i1:i2,j1:j2,k1:k2), d=1_I4P)
+               if (allocated(sol%turbulent_kinetic_energy)) &
+                  error=tec_var(n=ncn, var=sol%turbulent_kinetic_energy(i1:i2,j1:j2,k1:k2), d=1_I4P)
+               if (allocated(sol%turbulent_kinetic_energy_dissipation)) &
+                  error=tec_var(n=ncn, var=sol%turbulent_kinetic_energy_dissipation(i1:i2,j1:j2,k1:k2), d=1_I4P)
+               if (allocated(sol%lambda2)) &
+                  error = tec_var(n=ncn, var=sol%lambda2(i1:i2,j1:j2,k1:k2), d=1_I4P)
+               if (allocated(sol%qfactor)) &
+                  error = tec_var(n=ncn, var=sol%qfactor(i1:i2,j1:j2,k1:k2), d=1_I4P)
+               if (allocated(sol%liutex)) &
+                  error = tec_var(n=ncn, var=sol%liutex(i1:i2,j1:j2,k1:k2), d=1_I4P)
+               if (allocated(sol%helicity)) &
+                  error = tec_var(n=ncn, var=sol%helicity(i1:i2,j1:j2,k1:k2), d=1_I4P)
+               if (allocated(sol%vorticity)) then
+                  error = tec_var(n=ncn, var=sol%vorticity(i1:i2,j1:j2,k1:k2)%x, d=1_I4P)
+                  error = tec_var(n=ncn, var=sol%vorticity(i1:i2,j1:j2,k1:k2)%y, d=1_I4P)
+                  error = tec_var(n=ncn, var=sol%vorticity(i1:i2,j1:j2,k1:k2)%z, d=1_I4P)
                endif
-               if (sol%has_viscosity()) then
-                  error = tec_var(n=ncn, var=sol%viscosity(i1:i2,j1:j2,k1:k2), d=1_I4P)
+               if (allocated(sol%grad_p)) then
+                  error = tec_var(n=ncn, var=sol%grad_p(i1:i2,j1:j2,k1:k2)%x, d=1_I4P)
+                  error = tec_var(n=ncn, var=sol%grad_p(i1:i2,j1:j2,k1:k2)%y, d=1_I4P)
+                  error = tec_var(n=ncn, var=sol%grad_p(i1:i2,j1:j2,k1:k2)%z, d=1_I4P)
                endif
-               if (sol%has_turb_viscosity()) then
-                  error = tec_var(n=ncn, var=sol%turbulent_viscosity(i1:i2,j1:j2,k1:k2), d=1_I4P)
+               if (allocated(sol%LT)) then
+                  error = tec_var(n=ncn, var=sol%LT(1,1,i1:i2,j1:j2,k1:k2), d=1_I4P)
+                  error = tec_var(n=ncn, var=sol%LT(1,2,i1:i2,j1:j2,k1:k2), d=1_I4P)
+                  error = tec_var(n=ncn, var=sol%LT(1,3,i1:i2,j1:j2,k1:k2), d=1_I4P)
+                  error = tec_var(n=ncn, var=sol%LT(2,1,i1:i2,j1:j2,k1:k2), d=1_I4P)
+                  error = tec_var(n=ncn, var=sol%LT(2,2,i1:i2,j1:j2,k1:k2), d=1_I4P)
+                  error = tec_var(n=ncn, var=sol%LT(2,3,i1:i2,j1:j2,k1:k2), d=1_I4P)
+                  error = tec_var(n=ncn, var=sol%LT(3,1,i1:i2,j1:j2,k1:k2), d=1_I4P)
+                  error = tec_var(n=ncn, var=sol%LT(3,2,i1:i2,j1:j2,k1:k2), d=1_I4P)
+                  error = tec_var(n=ncn, var=sol%LT(3,3,i1:i2,j1:j2,k1:k2), d=1_I4P)
                endif
-               if (sol%has_turb_kinetic_energy()) then
-                  error = tec_var(n=ncn, var=sol%turbulent_kinetic_energy(i1:i2,j1:j2,k1:k2), d=1_I4P)
-               endif
-               if (sol%has_turb_kinetic_energy_diss()) then
-                  error = tec_var(n=ncn, var=sol%turbulent_kinetic_energy_dissipation(i1:i2,j1:j2,k1:k2), d=1_I4P)
-               endif
-               ! if (save_aux) then
-               !    error = tec_var(n=ncn, var=sol%lambda2(i1:i2,j1:j2,k1:k2),     d=1_I4P)
-               !    error = tec_var(n=ncn, var=sol%qfactor(i1:i2,j1:j2,k1:k2),     d=1_I4P)
-               !    error = tec_var(n=ncn, var=sol%helicity(i1:i2,j1:j2,k1:k2),    d=1_I4P)
-               !    error = tec_var(n=ncn, var=sol%vorticity(i1:i2,j1:j2,k1:k2)%x, d=1_I4P)
-               !    error = tec_var(n=ncn, var=sol%vorticity(i1:i2,j1:j2,k1:k2)%y, d=1_I4P)
-               !    error = tec_var(n=ncn, var=sol%vorticity(i1:i2,j1:j2,k1:k2)%z, d=1_I4P)
-               !    error = tec_var(n=ncn, var=sol%div2LT(i1:i2,j1:j2,k1:k2),      d=1_I4P)
-               ! endif
+               if (allocated(sol%div2LT)) &
+                  error = tec_var(n=ncn, var=sol%div2LT(i1:i2,j1:j2,k1:k2), d=1_I4P)
             endif
          endif
       endassociate

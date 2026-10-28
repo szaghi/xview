@@ -62,14 +62,15 @@ Go to [Top](#top) or [Toc](#toc)
 
 ## <a name="download"></a>Download xview
 
-If you use `git` it could be convenient to clone this repository:
-```bash
-git clone --recursive https://github.com/szaghi/xview
-```
-Other 2 possibilities are:
+Clone the repository, then fetch its dependencies with [FoBiS](https://github.com/szaghi/FoBiS):
 
-1. use the GitHub **Download ZIP** button on the right sidebar of this page;
-2. download one of the releases in the [release page](https://github.com/szaghi/xview/releases), also listed at the end of this page.
+```bash
+git clone https://github.com/szaghi/xview
+cd xview
+fobis fetch
+```
+
+`fobis fetch` clones the dependencies declared in the `[dependencies]` section of `fobos` ([PENF](https://github.com/szaghi/PENF), [FACE](https://github.com/szaghi/FACE), [BeFoR64](https://github.com/szaghi/BeFoR64), [StringiFor](https://github.com/szaghi/StringiFor), [FLAP](https://github.com/szaghi/FLAP), [VecFor](https://github.com/szaghi/VecFor), [FoXy](https://github.com/Fortran-FOSS-Programmers/FoXy), [VTKFortran](https://github.com/szaghi/VTKFortran)) into `src/third_party/`; `fobis fetch --update` refreshes them.
 
 Go to [Top](#top) or [Toc](#toc)
 
@@ -90,56 +91,20 @@ Go to [Top](#top) or [Toc](#toc)
 
 ## <a name="compile"></a>Compiling Instructions
 
-xview has been developed on GNU/Linux architectures. Other OS are not supported (and in general there is no best alternative to GNU/Linux :-).
+xview is built with [FoBiS](https://github.com/szaghi/FoBiS) (3.8+). After `fobis fetch`:
 
-xview have been successfully compiled with the following compilers:
-
-+ GNU gfortran (version 4.7.0 or higher);
-+ Intel Fortran Compiler ifort (version 12.0 or higher)
-
-xview is constituted by several modules. Therefore there are many dependences. The most easy way to compile the code is to start with the provided makefile thus it is necessary that the system has "Make" program (preferably GNU make http://www.gnu.org/software/make/).
-
-The provided makefile has several options. It has one rule that prints all options available and the default settings. Typing in the shell prompt: `code make help` the following output will be printed:
-
-```shell
- Make options of xview code
-
- Compiler choice: COMPILER=intel => default
-  COMPILER=gnu   => GNU gfortran
-  COMPILER=intel => Intel Fortran
-
- Compiling options
-  DEBUG=yes(no)    => on(off) debug                  (default no)
-  F03STD=yes(no)   => on(off) check standard fortran (default no)
-  OPTIMIZE=yes(no) => on(off) optimization           (default no)
-  OPENMP=yes(no)   => on(off) OpenMP directives      (default no)
-  BIGEIN=yes(no)   => on(off) Big Endian input files (default no)
-
- Preprocessing options
-  R16P=yes(no) => on(off) definition of real with "128 bit" (default no)
-
- Executable directory
-  DEXE="your_path" => directory where exe is placed (default ~/bin/)
-
- External libraries
-  TECIO=yes(no) => on(off) Tecplot IO library linking (default )
-
- Provided Rules
-  Defualt rule => ~/bin/xview
-  help         => printing this help message
-  cleanobj     => cleaning compiled object
-  cleanmod     => cleaning .mod files
-  cleanmsg     => cleaning make-log massage files
-  cleanexe     => cleaning executable files
-  clean        => running cleanobj, cleanmod and cleanmsg
-  cleanall     => running clean and cleanexe
-  tar          => creating a tar archive of the project
+```bash
+fobis build --mode xview-gnu         # GNU gfortran, optimized
+fobis build --mode xview-gnu-debug   # GNU gfortran, debug
+fobis build --lmodes                 # list all modes (GNU, Intel, NVIDIA)
 ```
 
-For example compiling in debug mode with the Intel Fortran compiler you can type:
+The executable is `bin/xview`. It links the vendored Tecplot I/O library `lib/tecio/libtecio.so` and finds it through
+its run path, without `LD_LIBRARY_PATH`. Tests and documentation:
 
-```shell
-make DEBUG=yes COMPILER=intel
+```bash
+fobis build --mode tests-gnu && bash scripts/run_tests.sh   # self-checking tests
+fobis rule --ex makedoc                                     # documentation site
 ```
 
 Go to [Top](#top) or [Toc](#toc)

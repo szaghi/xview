@@ -1,3 +1,3 @@
 #!/bin/bash
 
-xview --procinput proc.input
+../../../bin/xview --procinput proc.input

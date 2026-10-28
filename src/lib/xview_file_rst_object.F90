@@ -54,7 +54,7 @@ contains
    subroutine load_file(self,file_grd,file_icc,filename,patch,RE,rFR2,zfs,                                   &
                         is_level_set,is_zeroeq,is_oneeq,is_twoeq,is_cell_centered,                           &
                         compute_lambda2,compute_qfactor,compute_liutex, compute_helicity,compute_vorticity,  &
-                        compute_div2LT, compute_grad_p,compute_k_ratio,                                      &
+                        compute_LT, compute_div2LT, compute_grad_p,compute_k_ratio,                          &
                         compute_yplus,compute_tau,compute_div_tau,compute_loads,verbose)
    !< Load file.
    class(file_rst_object), intent(inout)        :: self              !< File data.
@@ -75,6 +75,7 @@ contains
    logical,                intent(in), optional :: compute_liutex    !< Compute liutex field.
    logical,                intent(in), optional :: compute_helicity  !< Compute helicity field.
    logical,                intent(in), optional :: compute_vorticity !< Compute vorticity field.
+   logical,                intent(in), optional :: compute_LT        !< Compute Lighthill tensor.
    logical,                intent(in), optional :: compute_div2LT    !< Compute double divergence of Lighthill tensor.
    logical,                intent(in), optional :: compute_grad_p    !< Compute gradient pressure.
    logical,                intent(in), optional :: compute_k_ratio   !< Compute kinetic energy ratio.
@@ -108,6 +109,7 @@ contains
                                              compute_helicity=compute_helicity,   &
                                              compute_vorticity=compute_vorticity, &
                                              compute_grad_p=compute_grad_p,       &
+                                             compute_LT=compute_LT,               &
                                              compute_div2LT=compute_div2LT,       &
                                              compute_k_ratio=compute_k_ratio,     &
                                              compute_yplus=compute_yplus,         &

@@ -25,6 +25,7 @@ endtype filenames_object
 type(ui_object) :: ui !< User Interface.
 
 call ui%get_options
+if (ui%verbose) print '(A)', ui%description()
 if (ui%cli%run_command('postprocess')) then
    if (ui%is_patch) then
       call postprocess(ui=ui, patch=ui%patch)
@@ -62,6 +63,7 @@ contains
                   filenames_rst = [filenames_rst,filenames(s)%names(t)]
                enddo
             enddo
+            filenames_rst = filenames_rst(2:)
             if (allocated(filenames_rst)) then
                files_number = size(filenames_rst, dim=1)
                ! remove ipath from file names
@@ -119,7 +121,9 @@ contains
                enddo
                if (trim(ui%filename_icc)/=OPT_UNSET)  then
                   call buffer%glob(pattern=trim(ui%ipath)//trim(ui%filename_icc)//'.*'//trim(adjustl(ui%grid_level))//&
-                                   '.p??? | grep -vi .grd', list=filenames_icc)
+                                   '.p???', list=filenames_icc)
+                  ! a wildcard grid level (the default) matches the grd files too
+                  filenames_icc = pack(filenames_icc, index(filenames_icc, '.grd.')==0)
                   if (allocated(filenames_icc)) then
                      if (size(filenames_icc, dim=1) /= files_number) then
                         write(stderr, '(A)') 'error: number of icc files different from grd files one!'
@@ -317,6 +321,7 @@ contains
                                                         compute_helicity=ui%compute_helicity,   &
                                                         compute_vorticity=ui%compute_vorticity, &
                                                         compute_grad_p=ui%compute_grad_p,       &
+                                                        compute_LT=ui%compute_LT,               &
                                                         compute_div2LT=ui%compute_div2LT,       &
                                                         compute_k_ratio=ui%compute_k_ratio,     &
                                                         compute_yplus=ui%compute_yplus,         &
@@ -324,16 +329,16 @@ contains
                                                         compute_div_tau=ui%compute_div_tau,     &
                                                         compute_loads=ui%compute_loads,         &
                                                         verbose=ui%verbose)
-   if (ui%is_vtk) then
-      call file_vtk%initialize(path=trim(adjustl(ui%opath)), file_name=trim(adjustl(basename_out)))
-      files_blocks(1) = ''
-      files_blocks(2) = ''
-      files_blocks(3) = file_esz%filename%basename()
-      buffer = filename_esz
-      call buffer%split(tokens=tokens, sep='_I')
-      blocks_map(1) = 0_I4P
-      blocks_map(2) = tokens(2)%to_number(kind=1_I4P)
-      if (file_esz%is_loaded) &
+   if (file_esz%is_loaded) then
+      if (ui%is_vtk) then
+         call file_vtk%initialize(path=trim(adjustl(ui%opath)), file_name=trim(adjustl(basename_out)))
+         files_blocks(1) = ''
+         files_blocks(2) = ''
+         files_blocks(3) = file_esz%filename%basename()
+         buffer = filename_esz
+         call buffer%split(tokens=tokens, sep='_I')
+         blocks_map(1) = 0_I4P
+         blocks_map(2) = tokens(2)%to_number(kind=1_I4P)
          call file_vtk%save_block_file_vtk(is_binary=.not.ui%is_ascii, &
                                            blocks_map=blocks_map,      &
                                            grd=file_esz%block_esz%grd, &
@@ -341,30 +346,32 @@ contains
                                            icc=file_esz%block_esz%icc, &
                                            sol=file_esz%block_esz%sol, &
                                            files_blocks=files_blocks)
-   endif
-   if (ui%is_aero_patch) call file_ptc%save_block_file_aero_patches(grd=file_esz%block_esz%grd, &
+      endif
+      if (ui%is_tec) then
+         call file_tec%initialize(path=trim(adjustl(ui%opath)),                                        &
+                                  file_name=trim(adjustl(basename_out))//file_esz%filename%basename(), &
+                                  is_binary=.not.ui%is_ascii,                                          &
+                                  is_cell_centered=.false.,                                            &
+                                  icc=file_esz%block_esz%icc,                                          &
+                                  sol=file_esz%block_esz%sol)
+         buffer = filename_esz
+         call buffer%split(tokens=tokens, sep='_I')
+         blocks_map(1) = 0_I4P
+         blocks_map(2) = tokens(2)%to_number(kind=1_I4P)
+         call file_tec%save_block_file_tec(is_binary=.not.ui%is_ascii, &
+                                           blocks_map=blocks_map,      &
+                                           grd=file_esz%block_esz%grd, &
+                                           is_cell_centered=.false.,   &
+                                           icc=file_esz%block_esz%icc, &
+                                           sol=file_esz%block_esz%sol)
+         call file_tec%finalize(is_binary=.not.ui%is_ascii)
+      endif
+      if (ui%is_aero_patch) then
+         call file_ptc%save_block_file_aero_patches(grd=file_esz%block_esz%grd, &
                                                                     sol=file_esz%block_esz%sol, &
                                                                     files_blocks=files_blocks)
-   ! if (ui%is_tec) then
-   !    buffer = filename_esz
-   !    call buffer%split(tokens=tokens, sep='_I')
-   !    blocks_map(1) = 0_I4P
-   !    blocks_map(2) = tokens(2)%to_number(kind=1_I4P)
-   !    buffer = buffer%basename()
-   !    call file_tec%initialize(path=trim(adjustl(ui%opath)), &
-   !                             file_name=buffer%chars(),     &
-   !                             is_binary=.not.ui%is_ascii,   &
-   !                             is_cell_centered=.false.,     &
-   !                             file_icc=,                &
-   !                             file_sol=
-   !    call file_tec%save_block_file_tec(is_binary=.not.ui%is_ascii, &
-   !                                      blocks_map=blocks_map,      &
-   !                                      grd=file_esz%block_esz%grd, &
-   !                                      is_cell_centered=.false.,   &
-   !                                      icc=file_esz%block_esz%icc, &
-   !                                      sol=file_esz%block_esz%sol)
-   !    call file_tec%finalize(is_binary=.not.ui%is_ascii)
-   ! endif
+      endif
+   endif
    endsubroutine postprocess_esz
 
    subroutine postprocess_gis(ui,myrank,ipath,filename_grd,filename_icc,filename_rst,opath,basename_out,files_blocks,patch)
@@ -416,6 +423,7 @@ contains
                                     compute_helicity=ui%compute_helicity,   &
                                     compute_vorticity=ui%compute_vorticity, &
                                     compute_grad_p=ui%compute_grad_p,       &
+                                    compute_LT=ui%compute_LT,               &
                                     compute_div2LT=ui%compute_div2LT,       &
                                     compute_k_ratio=ui%compute_k_ratio,     &
                                     compute_yplus=ui%compute_yplus,         &
@@ -480,8 +488,8 @@ contains
                                         file_name=trim(adjustl(basename_out)), &
                                         is_binary=.not.ui%is_ascii,            &
                                         is_cell_centered=ui%is_cell_centered,  &
-                                        file_icc=file_icc,                     &
-                                        file_sol=file_rst)
+                                        icc=file_icc%blocks(1),                &
+                                        sol=file_rst%blocks(1))
 
                do b=1, file_grd%blocks_number
                   call file_tec%save_block_file_tec(is_binary=.not.ui%is_ascii,           &

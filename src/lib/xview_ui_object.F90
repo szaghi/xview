@@ -18,60 +18,62 @@ character(6), parameter :: OPT_UNSET='unset!'  !< Option unset flag.
 
 type :: ui_object
    !< UI class definition.
-   type(command_line_interface) :: cli                      !< Command line interface handler.
-   type(file_procinput_object)  :: file_procinput           !< proc.input.
-   type(file_blksmap_object)    :: file_blksmap             !< File block groups map.
-   integer(I4P)                 :: myrank=-1                !< Input files process number in proc.input data.
-   type(file_mbpar_object)      :: file_mbpar               !< mb.par.
-   character(MAX_CHAR_LENGTH)   :: mbpar_file_name          !< File name of mb.par.
-   character(MAX_CHAR_LENGTH)   :: procinput_file_name      !< File name of proc.input.
-   character(MAX_CHAR_LENGTH)   :: blksmap_file_name        !< File name of blocks groups map ini file.
-   character(MAX_CHAR_LENGTH)   :: ipath                    !< Path to input files.
-   character(MAX_CHAR_LENGTH)   :: filename_grd             !< File name of file grd.
-   character(MAX_CHAR_LENGTH)   :: filename_icc             !< File name of file icc.
-   character(MAX_CHAR_LENGTH)   :: filename_rst             !< File name of file sol.
-   character(MAX_CHAR_LENGTH), allocatable :: sname_rst(:)                !< Suffix of file name of file sol.
-   character(MAX_CHAR_LENGTH)   :: opath                    !< Path to output files.
-   character(MAX_CHAR_LENGTH)   :: basename_out             !< Base name of output files.
-   character(2)                 :: grid_level               !< Grid level to be postprocessed.
-   real(R8P)                    :: RE=0._R8P                !< Reynolds number.
-   real(R8P)                    :: FR=-1._R8P               !< Froude number.
-   real(R8P)                    :: rFR2=0._R8P              !< 1/(Froude number)^2.
-   real(R8P)                    :: zfs=0._R8P               !< Z quote of free surface.
-   logical                      :: is_cell_centered=.false. !< Data are cell-centered, otherwise node-centered.
-   logical                      :: is_level_set=.false.     !< Solution has level set variable.
-   logical                      :: is_dns=.false.           !< Solution has not turbulent module (DNS).
-   logical                      :: is_zeroeq=.false.        !< Solution has zero equations turbulent variables.
-   logical                      :: is_oneeq=.true.          !< Solution has one  equations turbulent variables.
-   logical                      :: is_twoeq=.false.         !< Solution has two  equations turbulent variables.
-   logical                      :: is_ascii=.false.         !< Output is ascii formatted.
-   logical                      :: is_tec=.false.           !< Output is Tecplot formatted.
-   logical                      :: is_vtk=.true.            !< Output is VTK formatted.
-   logical                      :: is_patch=.false.         !< Extract patch instead of whole volume.
-   integer(I4P)                 :: patch                    !< Patch boundary conditions.
-   logical                      :: is_extsubzone=.false.    !< Input files contain extracted subzones instead regular files.
-   logical                      :: is_aero_patch=.false.    !< Save extracted patches in aeroacustic format.
-   logical                      :: compute_aux=.false.      !< Compute many auxiliary varibales.
-   logical                      :: compute_metrics=.false.  !< Compute metrics.
-   logical                      :: compute_lambda2=.false.  !< Compute lamda2 field.
-   logical                      :: compute_qfactor=.false.  !< Compute qfactor field.
-   logical                      :: compute_liutex=.false.   !< Compute liutex field.
-   logical                      :: compute_helicity=.false. !< Compute helicity field.
-   logical                      :: compute_vorticity=.false.!< Compute vorticity field.
-   logical                      :: compute_grad_p=.false.   !< Compute gradient pressure.
-   logical                      :: compute_div2LT=.false.   !< Compute double divergence of Lighthill tensor.
-   logical                      :: compute_k_ratio=.false.  !< Compute kinetic energy ratio.
-   logical                      :: compute_yplus=.false.    !< Compute y+ field.
-   logical                      :: compute_tau=.false.      !< Compute tau field.
-   logical                      :: compute_div_tau=.false.  !< Compute divergence of tau field.
-   logical                      :: compute_loads=.false.    !< Compute loads (forces and torques).
-   logical                      :: do_glob=.false.          !< Do glob files search, input file names become base name.
-   logical                      :: do_postprocess=.false.   !< Do postprocess for Paraview/Tecplo visualization.
-   logical                      :: do_interpolate=.false.   !< Do interpolate on new grids.
-   logical                      :: do_aeroacustic=.false.   !< Do aeroacustic propagation analysis.
-   logical                      :: verbose=.false.          !< Activate verbose mode.
+   type(command_line_interface)            :: cli                      !< Command line interface handler.
+   type(file_procinput_object)             :: file_procinput           !< proc.input.
+   type(file_blksmap_object)               :: file_blksmap             !< File block groups map.
+   integer(I4P)                            :: myrank=-1                !< Input files process number in proc.input data.
+   type(file_mbpar_object)                 :: file_mbpar               !< mb.par.
+   character(MAX_CHAR_LENGTH)              :: mbpar_file_name          !< File name of mb.par.
+   character(MAX_CHAR_LENGTH)              :: procinput_file_name      !< File name of proc.input.
+   character(MAX_CHAR_LENGTH)              :: blksmap_file_name        !< File name of blocks groups map ini file.
+   character(MAX_CHAR_LENGTH)              :: ipath                    !< Path to input files.
+   character(MAX_CHAR_LENGTH)              :: filename_grd             !< File name of file grd.
+   character(MAX_CHAR_LENGTH)              :: filename_icc             !< File name of file icc.
+   character(MAX_CHAR_LENGTH)              :: filename_rst             !< File name of file sol.
+   character(MAX_CHAR_LENGTH), allocatable :: sname_rst(:)             !< Suffix of file name of file sol.
+   character(MAX_CHAR_LENGTH)              :: opath                    !< Path to output files.
+   character(MAX_CHAR_LENGTH)              :: basename_out             !< Base name of output files.
+   character(2)                            :: grid_level               !< Grid level to be postprocessed.
+   real(R8P)                               :: RE=0._R8P                !< Reynolds number.
+   real(R8P)                               :: FR=-1._R8P               !< Froude number.
+   real(R8P)                               :: rFR2=0._R8P              !< 1/(Froude number)^2.
+   real(R8P)                               :: zfs=0._R8P               !< Z quote of free surface.
+   logical                                 :: is_cell_centered=.false. !< Data are cell-centered, otherwise node-centered.
+   logical                                 :: is_level_set=.false.     !< Solution has level set variable.
+   logical                                 :: is_dns=.false.           !< Solution has not turbulent module (DNS).
+   logical                                 :: is_zeroeq=.false.        !< Solution has zero equations turbulent variables.
+   logical                                 :: is_oneeq=.true.          !< Solution has one  equations turbulent variables.
+   logical                                 :: is_twoeq=.false.         !< Solution has two  equations turbulent variables.
+   logical                                 :: is_ascii=.false.         !< Output is ascii formatted.
+   logical                                 :: is_tec=.false.           !< Output is Tecplot formatted.
+   logical                                 :: is_vtk=.true.            !< Output is VTK formatted.
+   logical                                 :: is_patch=.false.         !< Extract patch instead of whole volume.
+   integer(I4P)                            :: patch                    !< Patch boundary conditions.
+   logical                                 :: is_extsubzone=.false.    !< Input files contain extracted subzones not regular files.
+   logical                                 :: is_aero_patch=.false.    !< Save extracted patches in aeroacustic format.
+   logical                                 :: compute_aux=.false.      !< Compute many auxiliary varibales.
+   logical                                 :: compute_metrics=.false.  !< Compute metrics.
+   logical                                 :: compute_lambda2=.false.  !< Compute lamda2 field.
+   logical                                 :: compute_qfactor=.false.  !< Compute qfactor field.
+   logical                                 :: compute_liutex=.false.   !< Compute liutex field.
+   logical                                 :: compute_helicity=.false. !< Compute helicity field.
+   logical                                 :: compute_vorticity=.false.!< Compute vorticity field.
+   logical                                 :: compute_grad_p=.false.   !< Compute gradient pressure.
+   logical                                 :: compute_LT=.false.       !< Compute Lighthill tensor.
+   logical                                 :: compute_div2LT=.false.   !< Compute double divergence of Lighthill tensor.
+   logical                                 :: compute_k_ratio=.false.  !< Compute kinetic energy ratio.
+   logical                                 :: compute_yplus=.false.    !< Compute y+ field.
+   logical                                 :: compute_tau=.false.      !< Compute tau field.
+   logical                                 :: compute_div_tau=.false.  !< Compute divergence of tau field.
+   logical                                 :: compute_loads=.false.    !< Compute loads (forces and torques).
+   logical                                 :: do_glob=.false.          !< Do glob files search, input file names become base name.
+   logical                                 :: do_postprocess=.false.   !< Do postprocess for Paraview/Tecplo visualization.
+   logical                                 :: do_interpolate=.false.   !< Do interpolate on new grids.
+   logical                                 :: do_aeroacustic=.false.   !< Do aeroacustic propagation analysis.
+   logical                                 :: verbose=.false.          !< Activate verbose mode.
    contains
       ! public methods
+      procedure, pass(self) :: description !< Return pretty-printed object description.
       procedure, pass(self) :: get_options !< Get (user) options.
       ! private methods
       procedure, pass(self), private :: parse_cli !< Parse command line interface.
@@ -80,6 +82,62 @@ endtype ui_object
 
 contains
    ! public methods
+   pure function description(self) result(desc)
+   !< Return a pretty-formatted object description.
+   class(ui_object), intent(in)  :: self             !< File data.
+   character(len=:), allocatable :: desc             !< Description.
+   character(len=1), parameter   :: NL=new_line('a') !< New line character.
+
+   desc =       'UI input data'                                                       //NL
+   desc = desc//'   mbpar_file_name    : '//trim(    self%mbpar_file_name            )//NL
+   desc = desc//'   procinput_file_name: '//trim(    self%procinput_file_name        )//NL
+   desc = desc//'   blksmap_file_name  : '//trim(    self%blksmap_file_name          )//NL
+   desc = desc//'   ipath              : '//trim(    self%ipath                      )//NL
+   desc = desc//'   filename_grd       : '//trim(    self%filename_grd               )//NL
+   desc = desc//'   filename_icc       : '//trim(    self%filename_icc               )//NL
+   desc = desc//'   filename_rst       : '//trim(    self%filename_rst               )//NL
+   desc = desc//'   opath              : '//trim(    self%opath                      )//NL
+   desc = desc//'   basename_out       : '//trim(    self%basename_out               )//NL
+   desc = desc//'   grid_level         : '//trim(    self%grid_level                 )//NL
+   desc = desc//'   RE                 : '//trim(str(self%RE                        ))//NL
+   desc = desc//'   FR                 : '//trim(str(self%FR                        ))//NL
+   desc = desc//'   rFR2               : '//trim(str(self%rFR2                      ))//NL
+   desc = desc//'   zfs                : '//trim(str(self%zfs                       ))//NL
+   desc = desc//'   is_cell_centered   : '//trim(str(self%is_cell_centered          ))//NL
+   desc = desc//'   is_level_set       : '//trim(str(self%is_level_set              ))//NL
+   desc = desc//'   is_dns             : '//trim(str(self%is_dns                    ))//NL
+   desc = desc//'   is_zeroeq          : '//trim(str(self%is_zeroeq                 ))//NL
+   desc = desc//'   is_oneeq           : '//trim(str(self%is_oneeq                  ))//NL
+   desc = desc//'   is_twoeq           : '//trim(str(self%is_twoeq                  ))//NL
+   desc = desc//'   is_ascii           : '//trim(str(self%is_ascii                  ))//NL
+   desc = desc//'   is_tec             : '//trim(str(self%is_tec                    ))//NL
+   desc = desc//'   is_vtk             : '//trim(str(self%is_vtk                    ))//NL
+   desc = desc//'   is_patch           : '//trim(str(self%is_patch                  ))//NL
+   desc = desc//'   patch              : '//trim(str(self%patch                     ))//NL
+   desc = desc//'   is_extsubzone      : '//trim(str(self%is_extsubzone             ))//NL
+   desc = desc//'   is_aero_patch      : '//trim(str(self%is_aero_patch             ))//NL
+   desc = desc//'   compute_aux        : '//trim(str(self%compute_aux               ))//NL
+   desc = desc//'   compute_metrics    : '//trim(str(self%compute_metrics           ))//NL
+   desc = desc//'   compute_lambda2    : '//trim(str(self%compute_lambda2           ))//NL
+   desc = desc//'   compute_qfactor    : '//trim(str(self%compute_qfactor           ))//NL
+   desc = desc//'   compute_liutex     : '//trim(str(self%compute_liutex            ))//NL
+   desc = desc//'   compute_helicity   : '//trim(str(self%compute_helicity          ))//NL
+   desc = desc//'   compute_vorticity  : '//trim(str(self%compute_vorticity         ))//NL
+   desc = desc//'   compute_grad_p     : '//trim(str(self%compute_grad_p            ))//NL
+   desc = desc//'   compute_LT         : '//trim(str(self%compute_LT                ))//NL
+   desc = desc//'   compute_div2LT     : '//trim(str(self%compute_div2LT            ))//NL
+   desc = desc//'   compute_k_ratio    : '//trim(str(self%compute_k_ratio           ))//NL
+   desc = desc//'   compute_yplus      : '//trim(str(self%compute_yplus             ))//NL
+   desc = desc//'   compute_tau        : '//trim(str(self%compute_tau               ))//NL
+   desc = desc//'   compute_div_tau    : '//trim(str(self%compute_div_tau           ))//NL
+   desc = desc//'   compute_loads      : '//trim(str(self%compute_loads             ))//NL
+   desc = desc//'   do_glob            : '//trim(str(self%do_glob                   ))//NL
+   desc = desc//'   do_postprocess     : '//trim(str(self%do_postprocess            ))//NL
+   desc = desc//'   do_interpolate     : '//trim(str(self%do_interpolate            ))//NL
+   desc = desc//'   do_aeroacustic     : '//trim(str(self%do_aeroacustic            ))//NL
+   desc = desc//'   verbose            : '//trim(str(self%verbose                   ))
+   endfunction description
+
    subroutine get_options(self)
    !< Get (user) options.
    class(ui_object), intent(inout) :: self !< User inteface.
@@ -146,6 +204,7 @@ contains
    call self%cli%get(        switch='--icc',                val=self%filename_icc,        error=error) ; if (error/=0) stop
    call self%cli%get(        switch='--rst',                val=self%filename_rst,        error=error) ; if (error/=0) stop
    call self%cli%get_varying(switch='--sname-rst',          val=self%sname_rst,           error=error) ; if (error/=0) stop
+   if (self%sname_rst(1)==OPT_UNSET) self%sname_rst(1) = '' ! unset suffix matches any restart file
    call self%cli%get(        switch='--opath',              val=self%opath,               error=error) ; if (error/=0) stop
    call self%cli%get(        switch='--out',                val=self%basename_out,        error=error) ; if (error/=0) stop
    call self%cli%get(        switch='--RE',                 val=self%RE,                  error=error) ; if (error/=0) stop
@@ -167,6 +226,7 @@ contains
       call self%cli%get(group='postprocess',switch='--helicity',   val=self%compute_helicity,  error=error) ; if (error/=0) stop
       call self%cli%get(group='postprocess',switch='--vorticity',  val=self%compute_vorticity, error=error) ; if (error/=0) stop
       call self%cli%get(group='postprocess',switch='--gradp',      val=self%compute_grad_p,    error=error) ; if (error/=0) stop
+      call self%cli%get(group='postprocess',switch='--LT',         val=self%compute_LT,        error=error) ; if (error/=0) stop
       call self%cli%get(group='postprocess',switch='--div2LT',     val=self%compute_div2LT,    error=error) ; if (error/=0) stop
       call self%cli%get(group='postprocess',switch='--k-ratio',    val=self%compute_k_ratio,   error=error) ; if (error/=0) stop
       call self%cli%get(group='postprocess',switch='--yplus',      val=self%compute_yplus,     error=error) ; if (error/=0) stop
@@ -339,7 +399,7 @@ contains
                      help='suffix of filename of solution restart files', &
                      required=.false.,                                    &
                      act='store',                                         &
-                     def='',                                              &
+                     def=OPT_UNSET,                                       &
                      nargs='+',                                           &
                      error=error)
    if (error/=0) stop
@@ -494,10 +554,10 @@ contains
 
    call self%cli%add(switch='--liutex',           &
                      help='compute liutex field', &
-                     required=.false.,             &
-                     act='store_true',             &
-                     def='.false.',                &
-                     group='postprocess',          &
+                     required=.false.,            &
+                     act='store_true',            &
+                     def='.false.',               &
+                     group='postprocess',         &
                      error=error)
    if (error/=0) stop
 
@@ -516,6 +576,15 @@ contains
                      act='store_true',               &
                      def='.false.',                  &
                      group='postprocess',            &
+                     error=error)
+   if (error/=0) stop
+
+   call self%cli%add(switch='--LT',                         &
+                     help='compute Lighthill Tensor field', &
+                     required=.false.,                      &
+                     act='store_true',                      &
+                     def='.false.',                         &
+                     group='postprocess',                   &
                      error=error)
    if (error/=0) stop
 

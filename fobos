@@ -1,123 +1,202 @@
+[project]
+name       = xview
+version    = VERSION
+summary    = post-processing and analysis tool for Xall/Xnavis CFD solver
+repository = https://github.com/szaghi/xview
+website    = https://szaghi.github.io/xview
+email      = stefano.zaghi@gmail.com
+authors    = "Stefano Zaghi" "Cristiano Andolfi" "Andrea Di Mascio"
+
+[dependencies]
+deps_dir   = src/third_party
+BeFoR64    = https://github.com/szaghi/BeFoR64
+FACE       = https://github.com/szaghi/FACE
+FLAP       = https://github.com/szaghi/FLAP
+FoXy       = https://github.com/Fortran-FOSS-Programmers/FoXy
+PENF       = https://github.com/szaghi/PENF
+StringiFor = https://github.com/szaghi/StringiFor
+VecFor     = https://github.com/szaghi/VecFor
+VTKFortran = https://github.com/szaghi/VTKFortran
+
 [modes]
-modes = gnu gnu-debug intel intel-debug nvidia
+modes = xview-gnu xview-gnu-debug
+        xview-intel xview-intel-debug
+        xview-nvf
+        tests-gnu tests-gnu-debug
 
 [common-variables]
 $CSTATIC_GNU = -cpp -c -frealloc-lhs
 $CSTATIC_INT = -cpp -c -assume realloc_lhs
 $CSTATIC_NVF = -cpp -c
-$DEBUG_GNU   = -Og -g3 -Wall -Wno-surprising -Wextra -fcheck=all -fbacktrace -std=f2008 -fall-intrinsics
-; $DEBUG_INT   = -O0 -check arg_temp_created -check format -check assume -check format -check output_conversion -check pointers -check stack -check uninit -debug all -warn all -extend-source 132 -traceback
-$DEBUG_INT   = -O0 -debug all -traceback
+$DEBUG_GNU   = -Og -g3 -Warray-bounds -Wcharacter-truncation -Wline-truncation -Wimplicit-interface -Wimplicit-procedure -Wunderflow -fcheck=all -fmodule-private -ffree-line-length-132 -fimplicit-none -fbacktrace -fdump-core -finit-real=nan -std=f2018 -fall-intrinsics
+$DEBUG_INT   = -O0 -check all -debug all -warn all -extend-source 132 -traceback
 $OPTIMIZE    = -O2
-$EXDIRS      = PENF/src/tests
-               FLAP/src/tests FLAP/src/third_party
-               StringiFor/src/tests StringiFor/src/third_party
-               BeFoR64/src/tests BeFoR64/src/third_party
-               FACE/src/tests FACE/src/third_party
-               VecFor/src/tests VecFor/src/third_party
-               VTKFortran/src/tests VTKFortran/src/third_party VTKFortran/references
-               FoXy/src/tests FoXy/src/third_party
+$EXDIRS      = BeFoR64/src/tests/ BeFoR64/src/third_party/ BeFoR64/scripts/ BeFoR64/docs/
+               FACE/src/tests/ FACE/src/third_party/ FACE/scripts/ FACE/docs/
+               FLAP/src/tests/ FLAP/src/third_party/ FLAP/scripts/ FLAP/docs/
+               FoXy/src/tests/ FoXy/src/third_party/ FoXy/scripts/ FoXy/docs/ FoXy/benchmarks/
+               PENF/src/tests/ PENF/src/third_party/ PENF/scripts/ PENF/docs/
+               StringiFor/src/tests/ StringiFor/src/third_party/ StringiFor/scripts/ StringiFor/docs/
+               VecFor/src/tests/ VecFor/src/third_party/ VecFor/scripts/ VecFor/docs/
+               VTKFortran/src/tests/ VTKFortran/src/third_party/ VTKFortran/scripts/ VTKFortran/docs/ VTKFortran/references/
+# Tecplot binary output links the vendored tecio (it needs the system libstdc++.so.6 only); the rpath, relative to the
+# executable (bin/ or exe/), finds it at runtime without LD_LIBRARY_PATH
+$TECIO_DIR   = lib/tecio/
+$TECIO_LIBS  = tecio
+$TECIO_RPATH = -Wl,-rpath,'$ORIGIN/../lib/tecio'
 
 # main modes
-# GNU
-[gnu]
+[xview-gnu]
+template  = template-static-gnu
+build_dir = bin
+target    = src/app/xview.F90
+output    = xview
+
+[xview-gnu-debug]
+template  = template-static-gnu-debug
+build_dir = bin
+target    = src/app/xview.F90
+output    = xview
+
+[xview-intel]
+template  = template-static-intel
+build_dir = bin
+target    = src/app/xview.F90
+output    = xview
+
+[xview-intel-debug]
+template  = template-static-intel-debug
+build_dir = bin
+target    = src/app/xview.F90
+output    = xview
+
+[xview-nvf]
+template  = template-static-nvf
+build_dir = bin
+target    = src/app/xview.F90
+output    = xview
+
+[tests-gnu]
 template  = template-static-gnu
 build_dir = exe
+src       = src/lib/ src/tests/
 
-[gnu-debug]
+[tests-gnu-debug]
 template  = template-static-gnu-debug
 build_dir = exe
+src       = src/lib/ src/tests/
 
-# Intel
-[intel]
-template  = template-static-intel
-build_dir = exe
-
-[intel-debug]
-template  = template-static-intel-debug
-build_dir = exe
-
-# Nvidia
-[nvidia]
-template  = template-static-nvidia
-build_dir = exe
-
-#templates
+# templates
 [template-static-gnu]
 compiler        = gnu
+exclude_dirs    = $EXDIRS
+src             = src/lib/ src/app/
 cflags          = $CSTATIC_GNU $OPTIMIZE
-mod_dir         = ./mod/
-obj_dir         = ./obj/
-src             = ./src/
+lflags          = $OPTIMIZE $TECIO_RPATH
+lib_dir         = $TECIO_DIR
+ext_libs        = $TECIO_LIBS
+cflags_heritage = True
 colors          = True
 quiet           = False
 log             = True
 jobs            = 10
-exclude_dirs    = $EXDIRS
-cflags_heritage = True
-lib_dir         = ./src/third_party/tecio/
-ext_libs        = tecio stdc++
 
 [template-static-gnu-debug]
 compiler        = gnu
+exclude_dirs    = $EXDIRS
+src             = src/lib/ src/app/
 cflags          = $CSTATIC_GNU $DEBUG_GNU
-lflags          = $DEBUG_GNU
-mod_dir         = ./mod/
-obj_dir         = ./obj/
-src             = ./src/
+lflags          = $DEBUG_GNU $TECIO_RPATH
+lib_dir         = $TECIO_DIR
+ext_libs        = $TECIO_LIBS
+cflags_heritage = True
 colors          = True
 quiet           = False
 log             = True
 jobs            = 10
-exclude_dirs    = $EXDIRS
-cflags_heritage = True
-lib_dir         = ./src/third_party/tecio/
-ext_libs        = tecio stdc++
 
 [template-static-intel]
 compiler        = intel_nextgen
+exclude_dirs    = $EXDIRS
+src             = src/lib/ src/app/
 cflags          = $CSTATIC_INT $OPTIMIZE
-lflags          = $OPTIMIZE
-mod_dir         = ./mod/
-obj_dir         = ./obj/
-src             = ./src/
+lflags          = $OPTIMIZE $TECIO_RPATH
+lib_dir         = $TECIO_DIR
+ext_libs        = $TECIO_LIBS
+cflags_heritage = True
 colors          = True
 quiet           = False
 log             = True
 jobs            = 10
-exclude_dirs    = $EXDIRS
-cflags_heritage = True
-lib_dir         = ./src/third_party/tecio/
-ext_libs        = tecio stdc++
 
 [template-static-intel-debug]
 compiler        = intel_nextgen
+exclude_dirs    = $EXDIRS
+src             = src/lib/ src/app/
 cflags          = $CSTATIC_INT $DEBUG_INT
-lflags          = $DEBUG_INT
-mod_dir         = ./mod/
-obj_dir         = ./obj/
-src             = ./src/
+lflags          = $DEBUG_INT $TECIO_RPATH
+lib_dir         = $TECIO_DIR
+ext_libs        = $TECIO_LIBS
+cflags_heritage = True
 colors          = True
 quiet           = False
 log             = True
 jobs            = 10
-exclude_dirs    = $EXDIRS
-cflags_heritage = True
-lib_dir         = ./src/third_party/tecio/
-ext_libs        = tecio stdc++
 
-[template-static-nvidia]
+[template-static-nvf]
 compiler        = nvfortran
+exclude_dirs    = $EXDIRS
+src             = src/lib/ src/app/
 cflags          = $CSTATIC_NVF $OPTIMIZE
-mod_dir         = ./mod/
-obj_dir         = ./obj/
-src             = ./src/
+lflags          = $OPTIMIZE $TECIO_RPATH
+lib_dir         = $TECIO_DIR
+ext_libs        = $TECIO_LIBS
+cflags_heritage = True
 colors          = True
 quiet           = False
 log             = True
 jobs            = 10
-exclude_dirs    = $EXDIRS
-cflags_heritage = True
-lib_dir         = ./src/third_party/tecio/
-ext_libs        = tecio stdc++
 
+# rules
+[rule-makedoc]
+help   = Build documentation with formal + VitePress
+rule_1 = formal generate --mirror-sources --diagrams --project docs/ford.md --output docs/api
+rule_2 = cd docs && npm install && npm run docs:build
+
+[rule-deldoc]
+help = Delete documentation build artifacts
+rule = rm -rf docs/.vitepress/dist/ docs/.vitepress/cache/ docs/api/
+
+[rule-delexe]
+help = Delete exes
+rule = rm -rf exe/ bin/
+
+[rule-clean]
+help   = Clean the project tree
+rule_1 = fobis rule --ex deldoc
+rule_2 = fobis rule --ex delexe
+rule_3 = rm -f *.gcov
+
+[rule-maketar]
+help = Make tar archive of the project
+rule = tar --xform="s%^%xview/%" --exclude=src/third_party --exclude=exe --exclude=bin -czf xview.tar.gz *
+
+[rule-makecoverage]
+help   = Perform coverage analysis
+rule_1 = fobis build --mode tests-gnu-debug --coverage --force-compile
+rule_2 = bash scripts/run_tests.sh
+rule_3 = bash -c 'rm -f exe/obj/penf*.gcda exe/obj/face*.gcda exe/obj/befor64*.gcda exe/obj/stringifor*.gcda exe/obj/flap*.gcda exe/obj/vecfor*.gcda exe/obj/foxy*.gcda exe/obj/vtk_fortran*.gcda'
+rule_4 = ./scripts/compute-coverage.sh
+
+[rule-makecoverage-analysis]
+help   = Perform coverage analysis and saving reports in markdown
+rule_1 = fobis rule --ex makecoverage
+rule_2 = fobis rule --gcov-analyzer docs/guide/ --gcov-analyzer coverage-analysis
+rule_3 = bash -c 'rm -f *.gcov parsed.xml source.xml'
+
+[scaffold]
+# fpm cannot link the vendored lib/tecio/libtecio.so from the manifest: xview is built with FoBiS only
+# ci.yml and docs.yml are disabled for now: remove them from this list and run `fobis scaffold sync` to restore them
+skip = fpm.toml
+       .github/workflows/ci.yml
+       .github/workflows/docs.yml

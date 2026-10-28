@@ -424,27 +424,27 @@ contains
    ! compute direction of i normals
    s1 = nodes(i,j  ,k) - nodes(i,j-1,k-1)
    s2 = nodes(i,j-1,k) - nodes(i,j,  k-1)
-   nd = s1.cross.s2
+   nd = s1%crossproduct(s2)
    s1 = 0.25_R8P*(nodes(i,  j,k)+nodes(i,  j-1,k)+nodes(i,  j,k-1)+nodes(i,  j-1,k-1))
    s2 = 0.25_R8P*(nodes(i-1,j,k)+nodes(i-1,j-1,k)+nodes(i-1,j,k-1)+nodes(i-1,j-1,k-1))
    db = s1 - s2
-   signi = sign(1._R8P,(nd.dot.db))
+   signi = sign(1._R8P,(nd%dotproduct(db)))
    ! compute direction of j normals
    s1 = nodes(i,j,k  ) - nodes(i-1,j,k-1)
    s2 = nodes(i,j,k-1) - nodes(i-1,j,k  )
-   nd = s1.cross.s2
+   nd = s1%crossproduct(s2)
    s1 = 0.25_R8P*(nodes(i,j,  k)+nodes(i-1,j,  k)+nodes(i,j,  k-1)+nodes(i-1,j,  k-1))
    s2 = 0.25_R8P*(nodes(i,j-1,k)+nodes(i-1,j-1,k)+nodes(i,j-1,k-1)+nodes(i-1,j-1,k-1))
    db = s1 - s2
-   signj = sign(1._R8P,(nd.dot.db))
+   signj = sign(1._R8P,(nd%dotproduct(db)))
    ! compute direction of k normals
    s1 = nodes(i,  j,k) - nodes(i-1,j-1,k)
    s2 = nodes(i-1,j,k) - nodes(i,  j-1,k)
-   nd = s1.cross.s2
+   nd = s1%crossproduct(s2)
    s1 = 0.25_R8P*(nodes(i,j,k  )+nodes(i-1,j,k  )+nodes(i,j-1,k  )+nodes(i-1,j-1,k  ))
    s2 = 0.25_R8P*(nodes(i,j,k-1)+nodes(i-1,j,k-1)+nodes(i,j-1,k-1)+nodes(i-1,j-1,k-1))
    db = s1 - s2
-   signk = sign(1._R8P,(nd.dot.db))
+   signk = sign(1._R8P,(nd%dotproduct(db)))
    !$omp parallel default(none)                        &
    !$omp private(i,j,k,NFS,Vx,Vy,Vz,xp,yp,zp,xm,ym,zm) &
    !$omp shared(Ni,Nj,Nk,gc,signi,signj,signk,nodes,Si,Sj,Sk,NFi,NFj,NFk,NFiS,NFjS,NFkS,volume)
@@ -704,7 +704,7 @@ contains
          if (bc_wall) tm = -1._R_P
          if (bc_correct) then
             ! normal metrics
-            sn = 2._R_P*(NFiS(1,j,k).dot.NFi(0,j,k))
+            sn = 2._R_P*(NFiS(1,j,k)%dotproduct(NFi(0,j,k)))
             NFiS( -1,j,  k  ) = -NFiS(1,j,k)+sn*NFi(0,j,k)
             ! tangential metrics
             NFjS(  0,j  ,k  ) = tm*NFjS(1,j  ,k  )
@@ -732,7 +732,7 @@ contains
          if (bc_wall) tm = -1._R_P
          if (bc_correct) then
             ! normal metrics
-            sn = 2._R_P*(NFiS(Ni-1,j,k).dot.NFi(Ni,j,k))
+            sn = 2._R_P*(NFiS(Ni-1,j,k)%dotproduct(NFi(Ni,j,k)))
             NFiS(  Ni+1,j,  k  ) = -NFiS(Ni-1,j,k)+sn*NFi(Ni,j,k)
             ! tangential metrics
             NFjS(  Ni+1,j  ,k  ) = tm*NFjS(Ni,j  ,k  )
@@ -760,7 +760,7 @@ contains
          if (bc_wall) tm = -1._R_P
          if (bc_correct) then
             ! normal metrics
-            sn = 2._R_P*(NFjS(i,1,k).dot.NFj(i,0,k))
+            sn = 2._R_P*(NFjS(i,1,k)%dotproduct(NFj(i,0,k)))
             NFjS(  i, -1,k  ) = -NFjS(i,1,k)+sn*NFj(i,0,k)
             ! tangential metrics
             NFiS(  i  ,0,k  ) = tm*NFiS(i  ,1,k  )
@@ -788,7 +788,7 @@ contains
          if (bc_wall) tm = -1._R_P
          if (bc_correct) then
             ! normal metrics
-            sn = 2._R_P*(NFjS(i,Nj-1,k).dot.NFj(i,Nj,k))
+            sn = 2._R_P*(NFjS(i,Nj-1,k)%dotproduct(NFj(i,Nj,k)))
             NFjS(  i,Nj+1,  k  ) = -NFjS(i,Nj-1,k)+sn*NFj(i,Nj,k)
             ! tangential metrics
             NFiS(  i  ,Nj+1,k  ) = tm*NFiS(i  ,Nj,k  )
@@ -816,7 +816,7 @@ contains
          if (bc_wall) tm = -1._R_P
          if (bc_correct) then
             ! normal metrics
-            sn = 2._R_P*(NFkS(i,j,1).dot.NFk(i,j,0))
+            sn = 2._R_P*(NFkS(i,j,1)%dotproduct(NFk(i,j,0)))
             NFkS(  i,  j, -1) = -NFkS(i,j,1)+sn*NFk(i,j,0)
             ! tangential metrics
             NFiS(  i  ,j  ,0) = tm*NFiS(i  ,j  ,1)
@@ -844,7 +844,7 @@ contains
          if (bc_wall) tm = -1._R_P
          if (bc_correct) then
             ! normal metrics
-            sn = 2._R_P*(NFkS(i,j,Nk-1).dot.NFk(i,j,Nk))
+            sn = 2._R_P*(NFkS(i,j,Nk-1)%dotproduct(NFk(i,j,Nk)))
             NFkS(  i,  j,  Nk+1) = -NFkS(i,j,Nk-1)+sn*NFk(i,j,Nk)
             ! tangential metrics
             NFiS(  i  ,j  ,Nk+1) = tm*NFiS(i  ,j  ,Nk)

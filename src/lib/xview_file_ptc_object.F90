@@ -165,9 +165,9 @@ contains
                enddo
             enddo
             ! pressure/velocity
-            nt1 = nci1 ; nt2 = nci2
-            nx1 = ncj1 ; nx2 = ncj2
-            nr1 = nck1 ; nr2 = nck2
+            nt1 = nni1 ; nt2 = nni2
+            nx1 = nnj1 ; nx2 = nnj2
+            nr1 = nnk1 ; nr2 = nnk2
             write(file_vp_unit,'(A)') 'ZONE I='//trim(str(n=nt2-nt1+1))//&
                                           ' J='//trim(str(n=nx2-nx1+1))//&
                                           ' K='//trim(str(n=nr2-nr1+1))//' F=POINT'
@@ -199,9 +199,9 @@ contains
                enddo
             enddo
             ! pressure/velocity
-            nt1 = ncj1 ; nt2 = ncj2
-            nx1 = nci1 ; nx2 = nci2
-            nr1 = nck1 ; nr2 = nck2
+            nt1 = nnj1 ; nt2 = nnj2
+            nx1 = nni1 ; nx2 = nni2
+            nr1 = nnk1 ; nr2 = nnk2
             write(file_vp_unit,'(A)') 'ZONE I='//trim(str(n=nt2-nt1+1))//&
                                           ' J='//trim(str(n=nx2-nx1+1))//&
                                           ' K='//trim(str(n=nr2-nr1+1))//' F=POINT'
@@ -233,9 +233,9 @@ contains
                enddo
             enddo
             ! pressure/velocity
-            nt1 = nci1 ; nt2 = nci2
-            nx1 = ncj1 ; nx2 = ncj2
-            nr1 = nck1 ; nr2 = nck2
+            nt1 = nni1 ; nt2 = nni2
+            nx1 = nnj1 ; nx2 = nnj2
+            nr1 = nnk1 ; nr2 = nnk2
             write(file_vp_unit,'(A)') 'ZONE I='//trim(str(n=nt2-nt1+1))//&
                                           ' J='//trim(str(n=nx2-nx1+1))//&
                                           ' K='//trim(str(n=nr2-nr1+1))//' F=POINT'
@@ -268,9 +268,9 @@ contains
             enddo
             ! y x z no
             ! pressure/velocity
-            nt1 = nci1 ; nt2 = nci2
-            nx1 = ncj1 ; nx2 = ncj2
-            nr1 = nck1 ; nr2 = nck2
+            nt1 = nni1 ; nt2 = nni2
+            nx1 = nnj1 ; nx2 = nnj2
+            nr1 = nnk1 ; nr2 = nnk2
             write(file_vp_unit,'(A)') 'ZONE I='//trim(str(n=nt2-nt1+1))//&
                                           ' J='//trim(str(n=nx2-nx1+1))//&
                                           ' K='//trim(str(n=nr2-nr1+1))//' F=POINT'
@@ -303,9 +303,9 @@ contains
             enddo
             ! y x z no
             ! pressure/velocity
-            nt1 = nci1 ; nt2 = nci2
-            nx1 = ncj1 ; nx2 = ncj2
-            nr1 = nck1 ; nr2 = nck2
+            nt1 = nni1 ; nt2 = nni2
+            nx1 = nnj1 ; nx2 = nnj2
+            nr1 = nnk1 ; nr2 = nnk2
             write(file_vp_unit,'(A)') 'ZONE I='//trim(str(n=nt2-nt1+1))//&
                                           ' J='//trim(str(n=nx2-nx1+1))//&
                                           ' K='//trim(str(n=nr2-nr1+1))//' F=POINT'
@@ -338,9 +338,9 @@ contains
             enddo
             ! y x z no
             ! pressure/velocity
-            nt1 = nci1 ; nt2 = nci2
-            nx1 = ncj1 ; nx2 = ncj2
-            nr1 = nck1 ; nr2 = nck2
+            nt1 = nni1 ; nt2 = nni2
+            nx1 = nnj1 ; nx2 = nnj2
+            nr1 = nnk1 ; nr2 = nnk2
             write(file_vp_unit,'(A)') 'ZONE I='//trim(str(n=nt2-nt1+1))//&
                                           ' J='//trim(str(n=nx2-nx1+1))//&
                                           ' K='//trim(str(n=nr2-nr1+1))//' F=POINT'
@@ -372,9 +372,9 @@ contains
                enddo
             enddo
             ! pressure/velocity
-            nt1 = ncj1 ; nt2 = ncj2
-            nx1 = nci1 ; nx2 = nci2
-            nr1 = nck1 ; nr2 = nck2
+            nt1 = nnj1 ; nt2 = nnj2
+            nx1 = nni1 ; nx2 = nni2
+            nr1 = nnk1 ; nr2 = nnk2
             write(file_vp_unit,'(A)') 'ZONE I='//trim(str(n=nt2-nt1+1))//&
                                           ' J='//trim(str(n=nx2-nx1+1))//&
                                           ' K='//trim(str(n=nr2-nr1+1))//' F=POINT'
@@ -406,9 +406,9 @@ contains
                enddo
             enddo
             ! pressure/velocity
-            nt1 = nci1 ; nt2 = nci2
-            nx1 = ncj1 ; nx2 = ncj2
-            nr1 = nck1 ; nr2 = nck2
+            nt1 = nni1 ; nt2 = nni2
+            nx1 = nnj1 ; nx2 = nnj2
+            nr1 = nnk1 ; nr2 = nnk2
             write(file_vp_unit,'(A)') 'ZONE I='//trim(str(n=nt2-nt1+1))//&
                                           ' J='//trim(str(n=nx2-nx1+1))//&
                                           ' K='//trim(str(n=nr2-nr1+1))//' F=POINT'

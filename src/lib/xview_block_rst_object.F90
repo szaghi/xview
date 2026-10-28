@@ -32,6 +32,7 @@ type :: block_rst_object
    real(R8P),    allocatable :: helicity(:,:,:)                             !< Helicity.
    type(vector), allocatable :: vorticity(:,:,:)                            !< Vorticity.
    type(vector), allocatable :: grad_p(:,:,:)                               !< Pressure Gradient.
+   real(R8P),    allocatable :: LT(:,:,:,:,:)                               !< Lighthill tensor.
    real(R8P),    allocatable :: div2LT(:,:,:)                               !< Double divergence of Lighthill tensor.
    real(R8P),    allocatable :: k_ratio(:,:,:)                              !< Kinetic energies ratio.
    real(R8P),    allocatable :: yplus(:,:,:)                                !< Estimation of y+.
@@ -52,6 +53,7 @@ type :: block_rst_object
    logical                   :: has_helicity=.false.                        !< Solution has helicity field.
    logical                   :: has_liutex=.false.                          !< Solution has liutex field.
    logical                   :: has_vorticity=.false.                       !< Solution has vorticity field.
+   logical                   :: has_LT=.false.                              !< Solution has Lighthill tensor.
    logical                   :: has_div2LT=.false.                          !< Solution has double divergence of Lighthill tensor.
    logical                   :: has_grad_p=.false.                          !< Solution has pressure gradient field.
    logical                   :: has_k_ratio=.false.                         !< Solution has kinetic energy ratio.
@@ -66,6 +68,7 @@ type :: block_rst_object
       procedure, pass(self) :: alloc                        !< Allocate dynamic memory.
       procedure, pass(self) :: compute_aux                  !< Compute auxiliary varibles.
       procedure, pass(self) :: compute_div2LT               !< Compute double divergence of Lighthill tensor.
+      procedure, pass(self) :: compute_LT                   !< Compute Lighthill tensor.
       procedure, pass(self) :: compute_kinetic_energy_ratio !< Compute ratio of kinetic energies.
       procedure, pass(self) :: compute_loads                !< Compute loads (forces and torques) on patches.
       procedure, pass(self) :: compute_tau                  !< Compute Tau wall and its divergence on patches.
@@ -109,6 +112,7 @@ contains
    if (allocated(self%helicity))                             deallocate(self%helicity)
    if (allocated(self%vorticity))                            deallocate(self%vorticity)
    if (allocated(self%grad_p))                               deallocate(self%grad_p)
+   if (allocated(self%LT))                                   deallocate(self%LT)
    if (allocated(self%div2LT))                               deallocate(self%div2LT)
    if (allocated(self%k_ratio))                              deallocate(self%k_ratio)
    if (allocated(self%yplus))                                deallocate(self%yplus)
@@ -132,6 +136,7 @@ contains
    self%has_yplus     =.false.
    self%has_tau       =.false.
    self%has_div_tau   =.false.
+   self%has_LT        =.false.
    self%has_div2LT    =.false.
    self%has_grad_p    =.false.
    self%has_k_ratio   =.false.
@@ -158,20 +163,20 @@ contains
       allocate(self%turbulent_kinetic_energy(1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
       allocate(self%turbulent_kinetic_energy_dissipation(1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
    endif
-   if (self%has_vorticity.or.self%has_lambda2.or.self%has_lambda2.or.self%has_liutex.or.self%has_helicity) then
-      allocate(self%vorticity(1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
-   endif
    ! auxiliary variables
    if (self%has_lambda2  ) allocate(self%lambda2(  1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
    if (self%has_qfactor  ) allocate(self%qfactor(  1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
-   if (self%has_liutex   ) allocate(self%liutex(   1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
-   if (self%has_helicity ) allocate(self%helicity( 1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
-   if (self%has_div2LT   ) allocate(self%div2LT(   1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
-   if (self%has_grad_p   ) allocate(self%grad_p(   1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
-   if (self%has_k_ratio  ) allocate(self%k_ratio(  1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
-   if (self%has_yplus    ) allocate(self%yplus(    0-gc(1):Ni+gc(2), 0-gc(3):Nj+gc(4), 0-gc(5):Nk+gc(6)))
-   if (self%has_tau      ) allocate(self%tau(      0-gc(1):Ni+gc(2), 0-gc(3):Nj+gc(4), 0-gc(5):Nk+gc(6)))
-   if (self%has_div_tau  ) allocate(self%div_tau(  0-gc(1):Ni+gc(2), 0-gc(3):Nj+gc(4), 0-gc(5):Nk+gc(6)))
+   if (self%has_liutex   ) allocate(self%liutex(    1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
+   if (self%has_helicity ) allocate(self%helicity(  1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
+   if (self%has_liutex.or.self%has_helicity.or.self%has_vorticity) &
+                           allocate(self%vorticity( 1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
+   if (self%has_LT       ) allocate(self%LT(1:3,1:3,1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
+   if (self%has_div2LT   ) allocate(self%div2LT(    1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
+   if (self%has_grad_p   ) allocate(self%grad_p(    1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
+   if (self%has_k_ratio  ) allocate(self%k_ratio(   1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
+   if (self%has_yplus    ) allocate(self%yplus(     0-gc(1):Ni+gc(2), 0-gc(3):Nj+gc(4), 0-gc(5):Nk+gc(6)))
+   if (self%has_tau      ) allocate(self%tau(       0-gc(1):Ni+gc(2), 0-gc(3):Nj+gc(4), 0-gc(5):Nk+gc(6)))
+   if (self%has_div_tau  ) allocate(self%div_tau(   0-gc(1):Ni+gc(2), 0-gc(3):Nj+gc(4), 0-gc(5):Nk+gc(6)))
    if (self%has_loads) then
       allocate(self%force_hydrostatic( 0-gc(1):Ni+gc(2), 0-gc(3):Nj+gc(4), 0-gc(5):Nk+gc(6)))
       allocate(self%force_pressure(    0-gc(1):Ni+gc(2), 0-gc(3):Nj+gc(4), 0-gc(5):Nk+gc(6)))
@@ -196,6 +201,7 @@ contains
    if ((self%has_lambda2).or.(self%has_qfactor).or.(self%has_liutex).or.(self%has_helicity).or.(self%has_vorticity))  then
       call self%compute_vorticity(grd)
    endif
+   if (self%has_LT)      call self%compute_LT
    if (self%has_div2LT)  call self%compute_div2LT(grd)
    if (self%has_grad_p)  call self%compute_grad_p(grd)
    if (self%has_k_ratio) call self%compute_kinetic_energy_ratio(grd)
@@ -240,6 +246,30 @@ contains
    enddo
    endassociate
    endsubroutine compute_div2LT
+
+   subroutine compute_LT(self)
+   !< Compute Lighthill tensor, incompressible and inviscid approximation (unit density), LT_ij = u_i * u_j.
+   class(block_rst_object), intent(inout) :: self  !< Block data.
+   integer(I4P)                           :: i,j,k !< Counter.
+
+   associate(Ni=>self%Ni, Nj=>self%Nj, Nk=>self%Nk, gc=>self%gc, momentum=>self%momentum, LT=>self%LT)
+   do k=1-gc(5),Nk+gc(6)
+      do j=1-gc(3),Nj+gc(4)
+         do i=1-gc(1),Ni+gc(2)
+            LT(1,1,i,j,k) = momentum(i,j,k)%x * momentum(i,j,k)%x
+            LT(1,2,i,j,k) = momentum(i,j,k)%x * momentum(i,j,k)%y
+            LT(1,3,i,j,k) = momentum(i,j,k)%x * momentum(i,j,k)%z
+            LT(2,1,i,j,k) = momentum(i,j,k)%y * momentum(i,j,k)%x
+            LT(2,2,i,j,k) = momentum(i,j,k)%y * momentum(i,j,k)%y
+            LT(2,3,i,j,k) = momentum(i,j,k)%y * momentum(i,j,k)%z
+            LT(3,1,i,j,k) = momentum(i,j,k)%z * momentum(i,j,k)%x
+            LT(3,2,i,j,k) = momentum(i,j,k)%z * momentum(i,j,k)%y
+            LT(3,3,i,j,k) = momentum(i,j,k)%z * momentum(i,j,k)%z
+         enddo
+      enddo
+   enddo
+   endassociate
+   endsubroutine compute_LT
 
    subroutine compute_grad_p(self, grd)
    !< Compute pressure gradient.
@@ -349,16 +379,16 @@ contains
                force_pressure(ni1,j,k) = -(1.5_R8P*pressure(ci1,j,k) - 0.5_R8P*pressure(ci1+3-2*face,j,k))*NFiS(ni1,j,k)
                ! viscous part of forces
                NdS = (2._R8P*NFiS(ni1,j,k) + NFiS(ni1+1,j,k) + NFiS(ni1-1,j,k))/(2._R8P*(volume(ni1,j,k)+volume(ni1+1,j,k)))
-               force_viscous(ni1,j,k) = (momentum(ci1-1+face,j,k) - momentum(ci1-2+face,j,k))*(NFi(ni1,j,k).dot.NdS)/RE
+               force_viscous(ni1,j,k) = (momentum(ci1-1+face,j,k) - momentum(ci1-2+face,j,k))*(NFi(ni1,j,k)%dotproduct(NdS))/RE
                if (face==2) then
                   force_hydrostatic(ni1,j,k) = -force_hydrostatic(ni1,j,k)
                   force_pressure(   ni1,j,k) = -force_pressure(   ni1,j,k)
                   force_viscous(    ni1,j,k) = -force_viscous(    ni1,j,k)
                endif
                ! torques
-               torque_hydrostatic(ni1,j,k) = fco.cross.force_hydrostatic(ni1,j,k)
-               torque_pressure(   ni1,j,k) = fco.cross.force_pressure(   ni1,j,k)
-               torque_viscous(    ni1,j,k) = fco.cross.force_viscous(    ni1,j,k)
+               torque_hydrostatic(ni1,j,k) = fco%crossproduct(force_hydrostatic(ni1,j,k))
+               torque_pressure(   ni1,j,k) = fco%crossproduct(force_pressure(   ni1,j,k))
+               torque_viscous(    ni1,j,k) = fco%crossproduct(force_viscous(    ni1,j,k))
             enddo
          enddo
       case(3,4)
@@ -377,16 +407,17 @@ contains
                force_pressure(i,nj1,k) = -(1.5_R_P*pressure(i,cj1,k) - 0.5_R_P*pressure(i,cj1+3-2*(face-2),k))*NFjS(i,nj1,k)
                ! viscous part of forces
                NdS = (2._R8P*NFjS(i,nj1,k) + NFjS(i,nj1+1,k) + NFjS(i,nj1-1,k))/(2._R8P*(volume(i,nj1,k)+volume(i,nj1+1,k)))
-               force_viscous(i,nj1,k) = (momentum(i,cj1-1+(face-2),k) - momentum(i,cj1-2+(face-2),k))*(NFj(i,nj1,k).dot.NdS)/RE
+               force_viscous(i,nj1,k) = (momentum(i,cj1-1+(face-2),k) - momentum(i,cj1-2+(face-2),k)) &
+                                        *(NFj(i,nj1,k)%dotproduct(NdS))/RE
                if (face==4) then
                   force_hydrostatic(i,nj1,k) = -force_hydrostatic(i,nj1,k)
                   force_pressure(   i,nj1,k) = -force_pressure(   i,nj1,k)
                   force_viscous(    i,nj1,k) = -force_viscous(    i,nj1,k)
                endif
                ! torques
-               torque_hydrostatic(i,nj1,k) = fco.cross.force_hydrostatic(i,nj1,k)
-               torque_pressure(   i,nj1,k) = fco.cross.force_pressure(   i,nj1,k)
-               torque_viscous(    i,nj1,k) = fco.cross.force_viscous(    i,nj1,k)
+               torque_hydrostatic(i,nj1,k) = fco%crossproduct(force_hydrostatic(i,nj1,k))
+               torque_pressure(   i,nj1,k) = fco%crossproduct(force_pressure(   i,nj1,k))
+               torque_viscous(    i,nj1,k) = fco%crossproduct(force_viscous(    i,nj1,k))
             enddo
          enddo
       case(5,6)
@@ -405,16 +436,17 @@ contains
                force_pressure(i,j,nk1) = -(1.5_R_P*pressure(i,j,ck1) - 0.5_R_P*pressure(i,j,ck1+3-2*(face-4)))*NFkS(i,j,nk1)
                ! viscous part of forces
                NdS = (2._R8P*NFkS(i,j,nk1) + NFkS(i,j,nk1+1) + NFkS(i,j,nk1-1))/(2._R8P*(volume(i,j,nk1)+volume(i,j,nk1+1)))
-               force_viscous(i,j,nk1) = (momentum(i,j,ck1-1+(face-4)) - momentum(i,j,ck1-2+(face-4)))*(NFk(i,j,nk1).dot.NdS)/RE
+               force_viscous(i,j,nk1) = (momentum(i,j,ck1-1+(face-4)) - momentum(i,j,ck1-2+(face-4))) &
+                                        *(NFk(i,j,nk1)%dotproduct(NdS))/RE
                if (face==6) then
                   force_hydrostatic(i,j,nk1) = -force_hydrostatic(i,j,nk1)
                   force_pressure(   i,j,nk1) = -force_pressure(   i,j,nk1)
                   force_viscous(    i,j,nk1) = -force_viscous(    i,j,nk1)
                endif
                ! torques
-               torque_hydrostatic(i,j,nk1) = fco.cross.force_hydrostatic(i,j,nk1)
-               torque_pressure(   i,j,nk1) = fco.cross.force_pressure(   i,j,nk1)
-               torque_viscous(    i,j,nk1) = fco.cross.force_viscous(    i,j,nk1)
+               torque_hydrostatic(i,j,nk1) = fco%crossproduct(force_hydrostatic(i,j,nk1))
+               torque_pressure(   i,j,nk1) = fco%crossproduct(force_pressure(   i,j,nk1))
+               torque_viscous(    i,j,nk1) = fco%crossproduct(force_viscous(    i,j,nk1))
             enddo
          enddo
       endselect
@@ -465,8 +497,8 @@ contains
                endif
                ! viscous part of forces
                NdS = (2._R8P*NFiS(ni1,j,k) + NFiS(ni1+1,j,k) + NFiS(ni1-1,j,k))/(2._R8P*(volume(ni1,j,k)+volume(ni1+1,j,k)))
-               tau(ci1,j,k) = (momentum(ci1-1+face,j,k) - momentum(ci1-2+face,j,k))*(NFi(ni1,j,k).dot.NdS)/RE
-               tau(ci1,j,k) = (tau(ci1,j,k).ortho.(NFi(ni1,j,k)))
+               tau(ci1,j,k) = (momentum(ci1-1+face,j,k) - momentum(ci1-2+face,j,k))*(NFi(ni1,j,k)%dotproduct(NdS))/RE
+               tau(ci1,j,k) = tau(ci1,j,k)%orthogonal(NFi(ni1,j,k))
                if (face==2) tau(ci1,j,k) = -tau(ci1,j,k)
             enddo
          enddo
@@ -496,10 +528,10 @@ contains
                tw_e = 0.5_R8P*(tau(ci1,j+1,k  ) - tau(ci1,j  ,k  ))
                tw_w = 0.5_R8P*(tau(ci1,j  ,k  ) - tau(ci1,j-1,k  ))
 
-               tw_zet_n = tw_n.dot.e_zet_n
-               tw_zet_s = tw_s.dot.e_zet_s
-               tw_eta_e = tw_e.dot.e_eta_e
-               tw_eta_w = tw_w.dot.e_eta_w
+               tw_zet_n = tw_n%dotproduct(e_zet_n)
+               tw_zet_s = tw_s%dotproduct(e_zet_s)
+               tw_eta_e = tw_e%dotproduct(e_eta_e)
+               tw_eta_w = tw_w%dotproduct(e_eta_w)
 
                div_tau(ci1,j,k) = (tw_zet_n - tw_zet_s) + (tw_eta_e - tw_eta_w)
             enddo
@@ -515,8 +547,8 @@ contains
                endif
                ! viscous part of forces
                NdS = (2._R8P*NFjS(i,nj1,k) + NFjS(i,nj1+1,k) + NFjS(i,nj1-1,k))/(2._R8P*(volume(i,nj1,k)+volume(i,nj1+1,k)))
-               tau(i,cj1,k) = (momentum(i,cj1-1+(face-2),k) - momentum(i,cj1-2+(face-2),k))*(NFj(i,nj1,k).dot.NdS)/RE
-               tau(i,cj1,k) = (tau(i,cj1,k).ortho.(NFj(i,nj1,k)))
+               tau(i,cj1,k) = (momentum(i,cj1-1+(face-2),k) - momentum(i,cj1-2+(face-2),k))*(NFj(i,nj1,k)%dotproduct(NdS))/RE
+               tau(i,cj1,k) = tau(i,cj1,k)%orthogonal(NFj(i,nj1,k))
                if (face==4) tau(i,cj1,k) = -tau(i,cj1,k)
             enddo
          enddo
@@ -546,10 +578,10 @@ contains
                tw_e = 0.5_R8P*(tau(i+1,cj1,k  ) - tau(i  ,cj1,k  ))
                tw_w = 0.5_R8P*(tau(i  ,cj1,k  ) - tau(i-1,cj1,k  ))
 
-               tw_zet_n = tw_n.dot.e_zet_n
-               tw_zet_s = tw_s.dot.e_zet_s
-               tw_eta_e = tw_e.dot.e_eta_e
-               tw_eta_w = tw_w.dot.e_eta_w
+               tw_zet_n = tw_n%dotproduct(e_zet_n)
+               tw_zet_s = tw_s%dotproduct(e_zet_s)
+               tw_eta_e = tw_e%dotproduct(e_eta_e)
+               tw_eta_w = tw_w%dotproduct(e_eta_w)
 
                div_tau(i,cj1,k) = (tw_zet_n - tw_zet_s) + (tw_eta_e - tw_eta_w)
             enddo
@@ -565,8 +597,8 @@ contains
                endif
                ! viscous part of forces
                NdS = (2._R8P*NFkS(i,j,nk1) + NFkS(i,j,nk1+1) + NFkS(i,j,nk1-1))/(2._R8P*(volume(i,j,nk1)+volume(i,j,nk1+1)))
-               tau(i,j,ck1) = (momentum(i,j,ck1-1+(face-4)) - momentum(i,j,ck1-2+(face-4)))*(NFk(i,j,nk1).dot.NdS)/RE
-               tau(i,j,ck1) = (tau(i,j,ck1).ortho.(NFk(i,j,nk1)))
+               tau(i,j,ck1) = (momentum(i,j,ck1-1+(face-4)) - momentum(i,j,ck1-2+(face-4)))*(NFk(i,j,nk1)%dotproduct(NdS))/RE
+               tau(i,j,ck1) = tau(i,j,ck1)%orthogonal(NFk(i,j,nk1))
                if (face==6) tau(i,j,ck1) = -tau(i,j,ck1)
             enddo
          enddo
@@ -596,10 +628,10 @@ contains
                tw_e = 0.5_R8P*(tau(i+1,j  ,ck1) - tau(i  ,j  ,ck1))
                tw_w = 0.5_R8P*(tau(i  ,j  ,ck1) - tau(i-1,j  ,ck1))
 
-               tw_zet_n = tw_n.dot.e_zet_n
-               tw_zet_s = tw_s.dot.e_zet_s
-               tw_eta_e = tw_e.dot.e_eta_e
-               tw_eta_w = tw_w.dot.e_eta_w
+               tw_zet_n = tw_n%dotproduct(e_zet_n)
+               tw_zet_s = tw_s%dotproduct(e_zet_s)
+               tw_eta_e = tw_e%dotproduct(e_eta_e)
+               tw_eta_w = tw_w%dotproduct(e_eta_w)
 
                div_tau(i,j,ck1) = (tw_zet_n - tw_zet_s) + (tw_eta_e - tw_eta_w)
             enddo
@@ -651,7 +683,8 @@ contains
       do k=0,Nk+1
          do j=0,Nj+1
             do i=0,Ni+1
-               helicity(i,j,k) = momentum(i,j,k).dot.vorticity(i,j,k)/(max(EPS12,normL2(momentum(i,j,k))*normL2(vorticity(i,j,k))))
+               helicity(i,j,k) = momentum(i,j,k)%dotproduct(vorticity(i,j,k) &
+                                                            /(max(EPS12,normL2(momentum(i,j,k))*normL2(vorticity(i,j,k)))))
             enddo
          enddo
       enddo
@@ -712,10 +745,11 @@ contains
                                   + gv(1,3,i,j,k)*(gv(2,1,i,j,k)*gv(3,2,i,j,k)-gv(2,2,i,j,k)*gv(3,1,i,j,k)))
                   c(2)          = -(gv(1,1,i,j,k) + gv(2,2,i,j,k) + gv(3,3,i,j,k))
                   c(1)          = -0.5_R8P*(tt(1,1) + tt(2,2) + tt(3,3) - (gv(1,1,i,j,k) + gv(2,2,i,j,k) + gv(3,3,i,j,k))**2)
-                  delta         = 18._R8P*c(1)*c(2)*c(0)-4._R8P*c(2)**3*c(0)+c(1)**2*c(2)**2-4._R8P*c(1)**3-27._R8P*c(0)**2
+                  delta         = 18._R8P*c(1)*c(2)*c(0) - 4._R8P*c(2)**3 * c(0) + c(1)**2 * c(2)**2 &
+                                - 4._R8P*c(1)**3 - 27._R8P*c(0)**2
                   delta         = -delta/108._R8P
                   r_liutex      = 0._R8P
-                  liutex(i,j,k) = 0._R8P  
+                  liutex(i,j,k) = 0._R8P
                     if (delta>0._R8P) then
                       mu = c(2)**2 - 3._R8P*c(1)/9._R8P
                       t  = (2._R8P*c(2)**3 - 9._R8P*c(1)*c(2) + 27._R8P*c(0)) / 54._R8P
@@ -725,8 +759,8 @@ contains
                       else
                          b = mu / aa
                       endif
-                      eig1c= cmplx(-0.5_R8P*(aa+b) - c(2)/3._R8P, 0.5_R8P*sqrt(3._R8P)*(aa-b))
-                      eig2c= cmplx(real(eig1c), -aimag(eig1c)) 
+                      eig1c= cmplx(-0.5_R8P*(aa+b) - c(2)/3._R8P, 0.5_R8P*sqrt(3._R8P)*(aa-b), kind=R8P)
+                      eig2c= cmplx(real(eig1c), -aimag(eig1c), kind=R8P)
                       eig3r= aa + b - c(2)/3._R8P
                       delta1=(gv(1,1,i,j,k)-eig3r)*(gv(2,2,i,j,k)-eig3r)-gv(2,1,i,j,k)*gv(1,2,i,j,k)
                       delta2=(gv(2,2,i,j,k)-eig3r)*(gv(3,3,i,j,k)-eig3r)-gv(2,3,i,j,k)*gv(3,2,i,j,k)
@@ -735,25 +769,25 @@ contains
                       if (delta1 == 0._R8P .and. delta2 == 0._R8P .and. delta3 == 0._R8P) then
                         stop
                       end if
-                    
+
                       if (abs(delta1) >= abs(delta2) .and. abs(delta1) >= abs(delta3)) then
-                      
+
                         r_star(1)=(-(gv(2,2,i,j,k)-eig3r)*gv(1,3,i,j,k) + gv(1,2,i,j,k)*gv(2,3,i,j,k))/delta1
                         r_star(2)=(  gv(2,1,i,j,k)*gv(1,3,i,j,k)-(gv(1,1,i,j,k)-eig3r)*gv(2,3,i,j,k))/delta1
                         r_star(3)=1._R8P
-                      
+
                       else if (abs(delta2) >= abs(delta1) .and. abs(delta2) >= abs(delta3)) then
-                      
+
                         r_star(1)=1._R8P
                         r_star(2)=(-(gv(3,3,i,j,k)-eig3r)*gv(2,1,i,j,k)+gv(2,3,i,j,k)*gv(3,1,i,j,k))/delta2
                         r_star(3)=(  gv(3,2,i,j,k)*gv(2,1,i,j,k)-(gv(2,2,i,j,k)-eig3r)*gv(3,1,i,j,k))/delta2
-                      
+
                       else if (abs(delta3) >= abs(delta1) .and. abs(delta3) >= abs(delta2)) then
-                      
+
                         r_star(1)=(-(gv(3,3,i,j,k)-eig3r)*gv(1,2,i,j,k)+gv(1,3,i,j,k)*gv(3,2,i,j,k))/delta3
                         r_star(2)=1._R8P
                         r_star(3)=( gv(3,1,i,j,k)*gv(1,2,i,j,k)-(gv(1,1,i,j,k)-eig3r)*gv(3,2,i,j,k))/delta3
-                      
+
                       else
                          stop
                       end if
@@ -762,13 +796,15 @@ contains
                       eig_vec_r(1) = r_star(1)/norm_r_star
                       eig_vec_r(2) = r_star(2)/norm_r_star
                       eig_vec_r(3) = r_star(3)/norm_r_star
-                      dummy = vorticity(i,j,k)%x*eig_vec_r(1)+vorticity(i,j,k)%y*eig_vec_r(2)+vorticity(i,j,k)%z*eig_vec_r(3)
+                      dummy = vorticity(i,j,k)%x * eig_vec_r(1) + vorticity(i,j,k)%y * eig_vec_r(2) &
+                            + vorticity(i,j,k)%z * eig_vec_r(3)
                       if (dummy<=0._R8P) then
-                        r_liutex = - eig_vec_r
+                         r_liutex = - eig_vec_r
                       else
-                        r_liutex = + eig_vec_r                                          
+                         r_liutex = + eig_vec_r
                       endif
-                      w_dot_r       = vorticity(i,j,k)%x*r_liutex(1)+vorticity(i,j,k)%y*r_liutex(2)+vorticity(i,j,k)%z*r_liutex(3)
+                      w_dot_r       = vorticity(i,j,k)%x * r_liutex(1) + vorticity(i,j,k)%y * r_liutex(2) &
+                                    + vorticity(i,j,k)%z * r_liutex(3)
                       liutex(i,j,k) = w_dot_r - sqrt(w_dot_r**2 + 4._R8P*aimag(eig1c)**2)
                   endif
                endif
@@ -787,6 +823,7 @@ contains
    integer(I4P),            intent(in)    :: patch   !< Patch bc to be found.
    real(R8P),               intent(in)    :: RE      !< Reynolds number.
    type(vector)                           :: NdS     !< Normal "tilde" for viscous part of forces (or distance for y+).
+   type(vector)                           :: dm      !< Momentum difference across the wall face.
    integer(I4P)                           :: i,j,k,p !< Counter.
    real(R8P)                              :: twall   !< Shear stress.
    real(R8P)                              :: utau    !< Friction velocity.
@@ -830,9 +867,10 @@ contains
                      0.25_R8P*(nodes(i2,j,k)+nodes(i2,j-1,k)+nodes(i2,j,k-1)+nodes(i2,j-1,k-1))
                NdS = 0.5_R8P*NdS
                ds = sqrt( normL2(NFiS(ni1,j,k)) )
-               twall = normL2((momentum(ci1-1+face,j,k)-momentum(ci1-2+face,j,k)).ortho.NFiS(ni1,j,k))/abs(Nds.dot.NFiS(ni1,j,k))/RE
+               dm    = momentum(ci1-1+face,j,k)-momentum(ci1-2+face,j,k)
+               twall = normL2(dm%orthogonal(NFiS(ni1,j,k)))/abs(Nds%dotproduct(NFiS(ni1,j,k)))/RE
                utau  = sqrt(twall)
-               yplus(ci1,j,k) = RE*utau*( abs(Nds.dot.NFiS(ni1,j,k)/ds) )
+               yplus(ci1,j,k) = RE*utau*( abs(Nds%dotproduct(NFiS(ni1,j,k)/ds)) )
             enddo
          enddo
       case(3,4)
@@ -856,10 +894,11 @@ contains
                      0.25_R8P*(nodes(i,j2,k)+nodes(i-1,j2,k)+nodes(i,j2,k-1)+nodes(i-1,j2,k-1))
                NdS = 0.5_R8P*NdS
                ds = sqrt( normL2(NFjS(i,nj1,k)) )
-               twall = normL2((momentum(i,cj1-1+(face-2),k) - momentum(i,cj1-2+(face-2),k)).ortho.NFjS(i,nj1,k))/ &
-                                   abs(Nds.dot.NFjS(i,nj1,k))/RE
+               dm    = momentum(i,cj1-1+(face-2),k) - momentum(i,cj1-2+(face-2),k)
+               twall = normL2(dm%orthogonal(NFjS(i,nj1,k)))/ &
+                                   abs(Nds%dotproduct(NFjS(i,nj1,k)))/RE
                utau  = sqrt(twall)
-               yplus(i,cj1,k) = RE*utau*( abs(Nds.dot.NFjS(i,nj1,k)/ds) )
+               yplus(i,cj1,k) = RE*utau*( abs(Nds%dotproduct(NFjS(i,nj1,k)/ds)) )
             enddo
          enddo
       case(5,6)
@@ -883,10 +922,11 @@ contains
                      0.25_R8P*(nodes(i,j,k2)+nodes(i-1,j,k2)+nodes(i,j-1,k2)+nodes(i-1,j-1,k2))
                NdS = 0.5_R8P*NdS
                ds = sqrt( normL2(NFkS(i,j,nk1)) )
-               twall = normL2((momentum(i,j,ck1-1+(face-4)) - momentum(i,j,ck1-2+(face-4))).ortho.NFkS(i,j,nk1))/ &
-                               abs(Nds.dot.NFkS(i,j,nk1))/RE
+               dm    = momentum(i,j,ck1-1+(face-4)) - momentum(i,j,ck1-2+(face-4))
+               twall = normL2(dm%orthogonal(NFkS(i,j,nk1)))/ &
+                               abs(Nds%dotproduct(NFkS(i,j,nk1)))/RE
                utau  = sqrt(twall)
-               yplus(i,j,ck1) = RE*utau*( abs(Nds.dot.NFkS(i,j,nk1)/ds) )
+               yplus(i,j,ck1) = RE*utau*( abs(Nds%dotproduct(NFkS(i,j,nk1)/ds)) )
             enddo
          enddo
       endselect
@@ -936,7 +976,7 @@ contains
 
    subroutine init(self, Ni, Nj, Nk, gc, is_level_set, is_zeroeq, is_oneeq, is_twoeq,  &
                    has_lambda2, has_qfactor, has_helicity, has_liutex,                 &
-                   has_vorticity, has_div2LT, has_grad_p, has_k_ratio,                 &
+                   has_vorticity, has_LT, has_div2LT, has_grad_p, has_k_ratio,         &
                    has_yplus, has_tau, has_div_tau, has_loads)
    !< Initialize block.
    class(block_rst_object), intent(inout)        :: self          !< Block data.
@@ -952,6 +992,7 @@ contains
    logical,                 intent(in), optional :: has_qfactor   !< Solution has qfactor field.
    logical,                 intent(in), optional :: has_helicity  !< Solution has helicity field.
    logical,                 intent(in), optional :: has_vorticity !< Solution has vorticity field.
+   logical,                 intent(in), optional :: has_LT        !< Solution has Lighthill tensor.
    logical,                 intent(in), optional :: has_div2LT    !< Solution has double divergence of Lighthill tensor.
    logical,                 intent(in), optional :: has_grad_p    !< Solution has pressure gradient.
    logical,                 intent(in), optional :: has_liutex    !< Solution has liutex field.
@@ -975,6 +1016,7 @@ contains
    if (present(has_liutex    )) self%has_liutex    = has_liutex
    if (present(has_helicity  )) self%has_helicity  = has_helicity
    if (present(has_vorticity )) self%has_vorticity = has_vorticity
+   if (present(has_LT        )) self%has_LT        = has_LT
    if (present(has_div2LT    )) self%has_div2LT    = has_div2LT
    if (present(has_grad_p    )) self%has_grad_p    = has_grad_p
    if (present(has_k_ratio   )) self%has_k_ratio   = has_k_ratio
@@ -1027,6 +1069,17 @@ contains
       tmp = self%vorticity%y ; call interpolate_R8P(var=tmp, vari=self%vorticity%y)
       tmp = self%vorticity%z ; call interpolate_R8P(var=tmp, vari=self%vorticity%z)
    endif
+   if (allocated(self%LT)) then
+      tmp = self%LT(1,1,:,:,:) ; call interpolate_R8P(var=tmp, vari=self%LT(1,1,:,:,:))
+      tmp = self%LT(1,2,:,:,:) ; call interpolate_R8P(var=tmp, vari=self%LT(1,2,:,:,:))
+      tmp = self%LT(1,3,:,:,:) ; call interpolate_R8P(var=tmp, vari=self%LT(1,3,:,:,:))
+      tmp = self%LT(2,1,:,:,:) ; call interpolate_R8P(var=tmp, vari=self%LT(2,1,:,:,:))
+      tmp = self%LT(2,2,:,:,:) ; call interpolate_R8P(var=tmp, vari=self%LT(2,2,:,:,:))
+      tmp = self%LT(2,3,:,:,:) ; call interpolate_R8P(var=tmp, vari=self%LT(2,3,:,:,:))
+      tmp = self%LT(3,1,:,:,:) ; call interpolate_R8P(var=tmp, vari=self%LT(3,1,:,:,:))
+      tmp = self%LT(3,2,:,:,:) ; call interpolate_R8P(var=tmp, vari=self%LT(3,2,:,:,:))
+      tmp = self%LT(3,3,:,:,:) ; call interpolate_R8P(var=tmp, vari=self%LT(3,3,:,:,:))
+   endif
    if (allocated(self%div2LT)) then
       tmp = self%div2LT ; call interpolate_R8P(var=tmp, vari=self%div2LT)
    endif
@@ -1055,9 +1108,10 @@ contains
       endsubroutine interpolate_R8P
    endsubroutine interpolate_at_nodes
 
-   subroutine load_dimensions(self, file_unit, is_level_set, is_zeroeq, is_oneeq, is_twoeq,                     &
-                              compute_lambda2,compute_qfactor,compute_helicity,compute_vorticity,compute_div2LT,&
-                              compute_grad_p,compute_liutex, compute_k_ratio,                                                   &
+   subroutine load_dimensions(self, file_unit, is_level_set, is_zeroeq, is_oneeq, is_twoeq,       &
+                              compute_lambda2,compute_qfactor,compute_helicity,compute_vorticity, &
+                              compute_LT,compute_div2LT,                                          &
+                              compute_grad_p,compute_liutex,compute_k_ratio,                      &
                               compute_yplus,compute_tau,compute_div_tau,compute_loads)
    !< Load block dimensions from file.
    !<
@@ -1072,6 +1126,7 @@ contains
    logical,                 intent(in), optional :: compute_qfactor   !< Compute qfactor field.
    logical,                 intent(in), optional :: compute_helicity  !< Compute helicity field.
    logical,                 intent(in), optional :: compute_vorticity !< Compute vorticity field.
+   logical,                 intent(in), optional :: compute_LT        !< Compute Lighthill tensor.
    logical,                 intent(in), optional :: compute_div2LT    !< Compute double divergence of Lighthill tensor.
    logical,                 intent(in), optional :: compute_grad_p    !< Compute gradient pressure.
    logical,                 intent(in), optional :: compute_liutex    !< Compute liutex.
@@ -1092,15 +1147,15 @@ contains
       call self%init(Ni=Ni,Nj=Nj,Nk=Nk,gc=gc,                                                               &
                      is_level_set=is_level_set,is_zeroeq=is_zeroeq,is_oneeq=is_oneeq,is_twoeq=is_twoeq,     &
                      has_lambda2=compute_lambda2,has_qfactor=compute_qfactor,has_helicity=compute_helicity, &
-                     has_vorticity=compute_vorticity,has_div2LT=compute_div2LT,has_grad_p=compute_grad_p,   &
-                     has_liutex=compute_liutex, has_k_ratio=compute_k_ratio,                                &
+                     has_vorticity=compute_vorticity,has_LT=compute_LT,has_div2LT=compute_div2LT,           &
+                     has_grad_p=compute_grad_p,has_liutex=compute_liutex,has_k_ratio=compute_k_ratio,       &
                      has_yplus=compute_yplus,has_tau=compute_tau,has_div_tau=compute_div_tau,has_loads=compute_loads)
    else
       call self%init(Ni=Ni,Nj=Nj,Nk=Nk,                                                                     &
                      is_level_set=is_level_set,is_zeroeq=is_zeroeq,is_oneeq=is_oneeq,is_twoeq=is_twoeq,     &
                      has_lambda2=compute_lambda2,has_qfactor=compute_qfactor,has_helicity=compute_helicity, &
-                     has_vorticity=compute_vorticity,has_div2LT=compute_div2LT,has_grad_p=compute_grad_p,   &
-                     has_liutex=compute_liutex, has_k_ratio=compute_k_ratio,                                &
+                     has_vorticity=compute_vorticity,has_LT=compute_LT,has_div2LT=compute_div2LT,           &
+                     has_grad_p=compute_grad_p,has_liutex=compute_liutex,has_k_ratio=compute_k_ratio,       &
                      has_yplus=compute_yplus,has_tau=compute_tau,has_div_tau=compute_div_tau,has_loads=compute_loads)
    endif
    endsubroutine load_dimensions

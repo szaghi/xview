@@ -175,58 +175,63 @@ contains
          endif
          ! if (allocated(grd%volume)) &
          ! error=output%xml_writer%write_dataarray(data_name='volume',x=grd%volume(i1:i2,j1:j2,k1:k2),one_component=.true.)
-         if (allocated(sol%k_ratio)) &
-         error=output%xml_writer%write_dataarray(data_name='k_ratio',x=sol%k_ratio(i1:i2,j1:j2,k1:k2),one_component=.true.)
-         if (allocated(sol%div2LT)) &
-         error=output%xml_writer%write_dataarray(data_name='div2LT',x=sol%div2LT(i1:i2,j1:j2,k1:k2),one_component=.true.)
-         if (allocated(sol%lambda2)) &
-         error=output%xml_writer%write_dataarray(data_name='lambda2',x=sol%lambda2(i1:i2,j1:j2,k1:k2),one_component=.true.)
-         if (allocated(sol%qfactor)) &
-         error=output%xml_writer%write_dataarray(data_name='qfactor',x=sol%qfactor(i1:i2,j1:j2,k1:k2),one_component=.true.)
-         if (allocated(sol%helicity)) &
-         error=output%xml_writer%write_dataarray(data_name='liutex',x=sol%liutex(i1:i2,j1:j2,k1:k2),one_component=.true.)
-         if (allocated(sol%helicity)) &
-         error=output%xml_writer%write_dataarray(data_name='helicity',x=sol%helicity(i1:i2,j1:j2,k1:k2),one_component=.true.)
-         if (allocated(sol%vorticity)) &
-         error=output%xml_writer%write_dataarray(data_name='vorticity', x=sol%vorticity(i1:i2,j1:j2,k1:k2)%x, &
-                                                                        y=sol%vorticity(i1:i2,j1:j2,k1:k2)%y, &
-                                                                        z=sol%vorticity(i1:i2,j1:j2,k1:k2)%z)
-         if (allocated(sol%grad_p)) &
-         error=output%xml_writer%write_dataarray(data_name='gradp', x=sol%grad_p(i1:i2,j1:j2,k1:k2)%x, &
-                                                                    y=sol%grad_p(i1:i2,j1:j2,k1:k2)%y, &
-                                                                    z=sol%grad_p(i1:i2,j1:j2,k1:k2)%z)
-         if (allocated(sol%force_hydrostatic).and.present(patch)) &
-         error=output%xml_writer%write_dataarray(data_name='force_hydrostatic',x=sol%force_hydrostatic(i1:i2,j1:j2,k1:k2)%x, &
-                                                                               y=sol%force_hydrostatic(i1:i2,j1:j2,k1:k2)%y, &
-                                                                               z=sol%force_hydrostatic(i1:i2,j1:j2,k1:k2)%z)
-         if (allocated(sol%force_pressure).and.present(patch)) &
-         error=output%xml_writer%write_dataarray(data_name='force_pressure',x=sol%force_pressure(i1:i2,j1:j2,k1:k2)%x, &
-                                                                            y=sol%force_pressure(i1:i2,j1:j2,k1:k2)%y, &
-                                                                            z=sol%force_pressure(i1:i2,j1:j2,k1:k2)%z)
-         if (allocated(sol%force_viscous).and.present(patch)) &
-         error=output%xml_writer%write_dataarray(data_name='force_viscous',x=sol%force_viscous(i1:i2,j1:j2,k1:k2)%x, &
-                                                                           y=sol%force_viscous(i1:i2,j1:j2,k1:k2)%y, &
-                                                                           z=sol%force_viscous(i1:i2,j1:j2,k1:k2)%z)
-         if (allocated(sol%torque_hydrostatic).and.present(patch)) &
-         error=output%xml_writer%write_dataarray(data_name='torque_hydrostatic',x=sol%torque_hydrostatic(i1:i2,j1:j2,k1:k2)%x, &
-                                                                                y=sol%torque_hydrostatic(i1:i2,j1:j2,k1:k2)%y, &
-                                                                                z=sol%torque_hydrostatic(i1:i2,j1:j2,k1:k2)%z)
-         if (allocated(sol%torque_pressure).and.present(patch)) &
-         error=output%xml_writer%write_dataarray(data_name='torque_pressure',x=sol%torque_pressure(i1:i2,j1:j2,k1:k2)%x, &
-                                                                             y=sol%torque_pressure(i1:i2,j1:j2,k1:k2)%y, &
-                                                                             z=sol%torque_pressure(i1:i2,j1:j2,k1:k2)%z)
-         if (allocated(sol%torque_viscous).and.present(patch)) &
-         error=output%xml_writer%write_dataarray(data_name='torque_viscous',x=sol%torque_viscous(i1:i2,j1:j2,k1:k2)%x, &
-                                                                            y=sol%torque_viscous(i1:i2,j1:j2,k1:k2)%y, &
-                                                                            z=sol%torque_viscous(i1:i2,j1:j2,k1:k2)%z)
-         if (allocated(sol%yplus).and.present(patch)) &
-         error=output%xml_writer%write_dataarray(data_name='yplus',x=sol%yplus(i1:i2,j1:j2,k1:k2),one_component=.true.)
-         if (allocated(sol%tau).and.present(patch)) &
-         error=output%xml_writer%write_dataarray(data_name='tau',x=sol%tau(i1:i2,j1:j2,k1:k2)%x, &
-                                                                 y=sol%tau(i1:i2,j1:j2,k1:k2)%y, &
-                                                                 z=sol%tau(i1:i2,j1:j2,k1:k2)%z)
-         if (allocated(sol%div_tau).and.present(patch)) &
-         error=output%xml_writer%write_dataarray(data_name='div_tau',x=sol%div_tau(i1:i2,j1:j2,k1:k2),one_component=.true.)
+         if (present(sol)) then
+            if (allocated(sol%k_ratio)) &
+            error=output%xml_writer%write_dataarray(data_name='k_ratio',x=sol%k_ratio(i1:i2,j1:j2,k1:k2),one_component=.true.)
+            if (allocated(sol%div2LT)) &
+            error=output%xml_writer%write_dataarray(data_name='div2LT',x=sol%div2LT(i1:i2,j1:j2,k1:k2),one_component=.true.)
+            if (allocated(sol%lambda2)) &
+            error=output%xml_writer%write_dataarray(data_name='lambda2',x=sol%lambda2(i1:i2,j1:j2,k1:k2),one_component=.true.)
+            if (allocated(sol%qfactor)) &
+            error=output%xml_writer%write_dataarray(data_name='qfactor',x=sol%qfactor(i1:i2,j1:j2,k1:k2),one_component=.true.)
+            if (allocated(sol%liutex)) &
+            error=output%xml_writer%write_dataarray(data_name='liutex',x=sol%liutex(i1:i2,j1:j2,k1:k2),one_component=.true.)
+            if (allocated(sol%helicity)) &
+            error=output%xml_writer%write_dataarray(data_name='helicity',x=sol%helicity(i1:i2,j1:j2,k1:k2),one_component=.true.)
+            if (allocated(sol%vorticity)) &
+            error=output%xml_writer%write_dataarray(data_name='vorticity', x=sol%vorticity(i1:i2,j1:j2,k1:k2)%x, &
+                                                                           y=sol%vorticity(i1:i2,j1:j2,k1:k2)%y, &
+                                                                           z=sol%vorticity(i1:i2,j1:j2,k1:k2)%z)
+            if (allocated(sol%grad_p)) &
+            error=output%xml_writer%write_dataarray(data_name='gradp', x=sol%grad_p(i1:i2,j1:j2,k1:k2)%x, &
+                                                                       y=sol%grad_p(i1:i2,j1:j2,k1:k2)%y, &
+                                                                       z=sol%grad_p(i1:i2,j1:j2,k1:k2)%z)
+            if (allocated(sol%LT)) & ! 9 components, read by ParaView as a tensor
+            error=output%xml_writer%write_dataarray(data_name='LT', &
+                                                    x=reshape(sol%LT(:,:,i1:i2,j1:j2,k1:k2), [9, i2-i1+1, j2-j1+1, k2-k1+1]))
+            if (allocated(sol%force_hydrostatic).and.present(patch)) &
+            error=output%xml_writer%write_dataarray(data_name='force_hydrostatic',x=sol%force_hydrostatic(i1:i2,j1:j2,k1:k2)%x, &
+                                                                                  y=sol%force_hydrostatic(i1:i2,j1:j2,k1:k2)%y, &
+                                                                                  z=sol%force_hydrostatic(i1:i2,j1:j2,k1:k2)%z)
+            if (allocated(sol%force_pressure).and.present(patch)) &
+            error=output%xml_writer%write_dataarray(data_name='force_pressure',x=sol%force_pressure(i1:i2,j1:j2,k1:k2)%x, &
+                                                                               y=sol%force_pressure(i1:i2,j1:j2,k1:k2)%y, &
+                                                                               z=sol%force_pressure(i1:i2,j1:j2,k1:k2)%z)
+            if (allocated(sol%force_viscous).and.present(patch)) &
+            error=output%xml_writer%write_dataarray(data_name='force_viscous',x=sol%force_viscous(i1:i2,j1:j2,k1:k2)%x, &
+                                                                              y=sol%force_viscous(i1:i2,j1:j2,k1:k2)%y, &
+                                                                              z=sol%force_viscous(i1:i2,j1:j2,k1:k2)%z)
+            if (allocated(sol%torque_hydrostatic).and.present(patch)) &
+            error=output%xml_writer%write_dataarray(data_name='torque_hydrostatic',x=sol%torque_hydrostatic(i1:i2,j1:j2,k1:k2)%x, &
+                                                                                   y=sol%torque_hydrostatic(i1:i2,j1:j2,k1:k2)%y, &
+                                                                                   z=sol%torque_hydrostatic(i1:i2,j1:j2,k1:k2)%z)
+            if (allocated(sol%torque_pressure).and.present(patch)) &
+            error=output%xml_writer%write_dataarray(data_name='torque_pressure',x=sol%torque_pressure(i1:i2,j1:j2,k1:k2)%x, &
+                                                                                y=sol%torque_pressure(i1:i2,j1:j2,k1:k2)%y, &
+                                                                                z=sol%torque_pressure(i1:i2,j1:j2,k1:k2)%z)
+            if (allocated(sol%torque_viscous).and.present(patch)) &
+            error=output%xml_writer%write_dataarray(data_name='torque_viscous',x=sol%torque_viscous(i1:i2,j1:j2,k1:k2)%x, &
+                                                                               y=sol%torque_viscous(i1:i2,j1:j2,k1:k2)%y, &
+                                                                               z=sol%torque_viscous(i1:i2,j1:j2,k1:k2)%z)
+            if (allocated(sol%yplus).and.present(patch)) &
+            error=output%xml_writer%write_dataarray(data_name='yplus',x=sol%yplus(i1:i2,j1:j2,k1:k2),one_component=.true.)
+            if (allocated(sol%tau).and.present(patch)) &
+            error=output%xml_writer%write_dataarray(data_name='tau',x=sol%tau(i1:i2,j1:j2,k1:k2)%x, &
+                                                                    y=sol%tau(i1:i2,j1:j2,k1:k2)%y, &
+                                                                    z=sol%tau(i1:i2,j1:j2,k1:k2)%z)
+            if (allocated(sol%div_tau).and.present(patch)) &
+            error=output%xml_writer%write_dataarray(data_name='div_tau',x=sol%div_tau(i1:i2,j1:j2,k1:k2),one_component=.true.)
+         endif
          if (is_cell_centered) then
             error = output%xml_writer%write_dataarray(location='cell', action='close')
          else
