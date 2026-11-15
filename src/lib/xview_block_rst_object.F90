@@ -484,7 +484,7 @@ contains
                 iicc=>icc%icc,ticc=>icc%tcc,                                      &
                 is_level_set=>self%is_level_set,                                  &
                 momentum=>self%momentum, f0=>self%level_set_zero, &
-                tau=>self%tau, div_tau=>self%div_tau)
+                tau=>self%tau)
       select case(face)
       case(1,2)
          do k=ck1,ck2
@@ -533,7 +533,7 @@ contains
                tw_eta_e = tw_e%dotproduct(e_eta_e)
                tw_eta_w = tw_w%dotproduct(e_eta_w)
 
-               div_tau(ci1,j,k) = (tw_zet_n - tw_zet_s) + (tw_eta_e - tw_eta_w)
+               if (allocated(self%div_tau)) self%div_tau(ci1,j,k) = (tw_zet_n - tw_zet_s) + (tw_eta_e - tw_eta_w)
             enddo
          enddo
       case(3,4)
@@ -583,7 +583,7 @@ contains
                tw_eta_e = tw_e%dotproduct(e_eta_e)
                tw_eta_w = tw_w%dotproduct(e_eta_w)
 
-               div_tau(i,cj1,k) = (tw_zet_n - tw_zet_s) + (tw_eta_e - tw_eta_w)
+               if (allocated(self%div_tau)) self%div_tau(i,cj1,k) = (tw_zet_n - tw_zet_s) + (tw_eta_e - tw_eta_w)
             enddo
          enddo
       case(5,6)
@@ -633,7 +633,7 @@ contains
                tw_eta_e = tw_e%dotproduct(e_eta_e)
                tw_eta_w = tw_w%dotproduct(e_eta_w)
 
-               div_tau(i,j,ck1) = (tw_zet_n - tw_zet_s) + (tw_eta_e - tw_eta_w)
+               if (allocated(self%div_tau)) self%div_tau(i,j,ck1) = (tw_zet_n - tw_zet_s) + (tw_eta_e - tw_eta_w)
             enddo
          enddo
       endselect
@@ -1088,10 +1088,12 @@ contains
    endif
    contains
       subroutine interpolate_R8P(var, vari)
-      !< Interpolate a real(R8P) scalar.
-      real(R8P), intent(in)  :: var (0:,0:,0:) !< Cell centered variable.
-      real(R8P), intent(out) :: vari(0:,0:,0:) !< Node centered interpolated variable.
-      integer(I4P)           :: i, j, k        !< Counters.
+      !< Interpolate a real(R8P) scalar: node i (0..N) is the mean of cells i..i+1 (cell i spans nodes i-1..i).
+      !<
+      !< @note Explicit lower bounds: the actual arrays start at 1-gc, an assumed-shape (0:) dummy would rebase them.
+      real(R8P), intent(in)  :: var (1-self%gc(1):,1-self%gc(3):,1-self%gc(5):) !< Cell centered variable.
+      real(R8P), intent(out) :: vari(1-self%gc(1):,1-self%gc(3):,1-self%gc(5):) !< Node centered interpolated variable.
+      integer(I4P)           :: i, j, k                                          !< Counters.
 
       do k=0, self%Nk
          do j=0, self%Nj
