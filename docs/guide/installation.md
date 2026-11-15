@@ -30,7 +30,7 @@ The executable finds `libtecio.so` through its run path, so it needs no `LD_LIBR
 [PENF](https://github.com/szaghi/PENF), [FACE](https://github.com/szaghi/FACE),
 [BeFoR64](https://github.com/szaghi/BeFoR64), [StringiFor](https://github.com/szaghi/StringiFor),
 [FLAP](https://github.com/szaghi/FLAP), [VecFor](https://github.com/szaghi/VecFor),
-[FoXy](https://github.com/Fortran-FOSS-Programmers/FoXy) and [VTKFortran](https://github.com/szaghi/VTKFortran).
+[FoXy](https://github.com/szaghi/FoXy) and [VTKFortran](https://github.com/szaghi/VTKFortran).
 `fobis fetch --update` refreshes them.
 
 ## Tests

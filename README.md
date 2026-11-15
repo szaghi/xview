@@ -70,7 +70,7 @@ cd xview
 fobis fetch
 ```
 
-`fobis fetch` clones the dependencies declared in the `[dependencies]` section of `fobos` ([PENF](https://github.com/szaghi/PENF), [FACE](https://github.com/szaghi/FACE), [BeFoR64](https://github.com/szaghi/BeFoR64), [StringiFor](https://github.com/szaghi/StringiFor), [FLAP](https://github.com/szaghi/FLAP), [VecFor](https://github.com/szaghi/VecFor), [FoXy](https://github.com/Fortran-FOSS-Programmers/FoXy), [VTKFortran](https://github.com/szaghi/VTKFortran)) into `src/third_party/`; `fobis fetch --update` refreshes them.
+`fobis fetch` clones the dependencies declared in the `[dependencies]` section of `fobos` ([PENF](https://github.com/szaghi/PENF), [FACE](https://github.com/szaghi/FACE), [BeFoR64](https://github.com/szaghi/BeFoR64), [StringiFor](https://github.com/szaghi/StringiFor), [FLAP](https://github.com/szaghi/FLAP), [VecFor](https://github.com/szaghi/VecFor), [FoXy](https://github.com/szaghi/FoXy), [VTKFortran](https://github.com/szaghi/VTKFortran)) into `src/third_party/`; `fobis fetch --update` refreshes them.
 
 Go to [Top](#top) or [Toc](#toc)
 
