@@ -44,6 +44,8 @@ type :: ui_object
    logical                                 :: is_zeroeq=.false.        !< Solution has zero equations turbulent variables.
    logical                                 :: is_oneeq=.true.          !< Solution has one  equations turbulent variables.
    logical                                 :: is_twoeq=.false.         !< Solution has two  equations turbulent variables.
+   logical                                 :: is_xall_rst=.false.      !< Restart files written by Xall (otherwise Xnavis).
+   logical                                 :: is_xall_ra_rst=.false.   !< Restart files are Xall running averages.
    logical                                 :: is_ascii=.false.         !< Output is ascii formatted.
    logical                                 :: is_tec=.false.           !< Output is Tecplot formatted.
    logical                                 :: is_vtk=.true.            !< Output is VTK formatted.
@@ -109,6 +111,8 @@ contains
    desc = desc//'   is_zeroeq          : '//trim(str(self%is_zeroeq                 ))//NL
    desc = desc//'   is_oneeq           : '//trim(str(self%is_oneeq                  ))//NL
    desc = desc//'   is_twoeq           : '//trim(str(self%is_twoeq                  ))//NL
+   desc = desc//'   is_xall_rst        : '//trim(str(self%is_xall_rst               ))//NL
+   desc = desc//'   is_xall_ra_rst     : '//trim(str(self%is_xall_ra_rst            ))//NL
    desc = desc//'   is_ascii           : '//trim(str(self%is_ascii                  ))//NL
    desc = desc//'   is_tec             : '//trim(str(self%is_tec                    ))//NL
    desc = desc//'   is_vtk             : '//trim(str(self%is_vtk                    ))//NL
@@ -169,6 +173,15 @@ contains
       if (self%verbose) print '(A)', self%file_mbpar%description()
    endif
    if (self%FR> 0._R8P) self%rFR2 = 1._R8P/(self%FR**2)
+   if (self%is_xall_ra_rst) then
+      ! checked after mb.par, which overrides RE and switches on the level set when FR > 0
+      if (self%is_level_set) &
+         error stop 'error: --rst-format xall-ra: no level set in running averages (drop --level-set; an mb.par with FR>0 sets it)'
+      ! with Spalart-Allmaras the effective viscosity is rebuilt from the mean nu~: the --RE default must not be used
+      ! silently
+      if (self%is_oneeq.and.(.not.(self%cli%is_passed(switch='--RE').or.self%file_mbpar%is_loaded))) &
+         error stop 'error: --rst-format xall-ra needs --RE or mb.par (effective viscosity rebuilt from the mean nu~)'
+   endif
    call self%file_procinput%load_file(path=self%ipath, filename=self%procinput_file_name, verbose=self%verbose)
    if (self%blksmap_file_name/=OPT_unset) &
       call self%file_blksmap%load_file(path=self%ipath, filename=self%blksmap_file_name, verbose=self%verbose)
@@ -188,6 +201,7 @@ contains
    integer(I4P)                    :: turbulent_eq !< Number equations of Turbulent model.
    character(3)                    :: is_tec       !< Flag for setting Tecplot output files.
    character(3)                    :: is_vtk       !< Flag for setting VTK output files.
+   character(7)                    :: rst_format   !< Format of restart files (xnavis, xall or xall-ra).
 
    call self%set_cli
    call self%cli%parse(error=error) ; if (error/=0) stop
@@ -213,6 +227,9 @@ contains
    call self%cli%get(        switch='--level-set',          val=self%is_level_set,        error=error) ; if (error/=0) stop
    call self%cli%get(        switch='--no-turbulent-model', val=self%is_dns,              error=error) ; if (error/=0) stop
    call self%cli%get(        switch='--turbulent-eq',       val=turbulent_eq,             error=error) ; if (error/=0) stop
+   call self%cli%get(        switch='--rst-format',         val=rst_format,               error=error) ; if (error/=0) stop
+   self%is_xall_ra_rst = (trim(adjustl(rst_format))=='xall-ra')
+   self%is_xall_rst = (trim(adjustl(rst_format))=='xall').or.self%is_xall_ra_rst
    if (self%cli%run_command('postprocess')) then
       call self%cli%get(group='postprocess',switch='--ascii',      val=self%is_ascii,          error=error) ; if (error/=0) stop
       call self%cli%get(group='postprocess',switch='--tec',        val=is_tec,                 error=error) ; if (error/=0) stop
@@ -468,6 +485,21 @@ contains
                      act='store',                             &
                      def='1',                                 &
                      choices='0,1,2',                         &
+                     error=error)
+   if (error/=0) stop
+
+   call self%cli%add(switch='--rst-format',                                               &
+                     help='restart layout: xnavis (u,v,w,p,... on cells 0..N+1), '//               &
+                          'xall (p,u,v,w,... on cells 1-gc..N+gc, as written by Xall) or '//          &
+                          'xall-ra (Xall running averages; one-equation model needs --RE or mb.par; '// &
+                          'no level set; zero/two-equation models give no viscosity). '//             &
+                          'Xall files do not store gc: 2 ghost cells are assumed (Xall default), '//  &
+                          'files written with cc_new_format and n_cornici/=2 are misread; '//          &
+                          'one level-set field is assumed (nls=1, no split_freesur)',                 &
+                     required=.false.,                                                    &
+                     act='store',                                                         &
+                     def='xnavis',                                                        &
+                     choices='xnavis,xall,xall-ra',                                       &
                      error=error)
    if (error/=0) stop
 

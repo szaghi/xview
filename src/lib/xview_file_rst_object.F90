@@ -52,7 +52,7 @@ contains
    endsubroutine alloc
 
    subroutine load_file(self,file_grd,file_icc,filename,patch,RE,rFR2,zfs,                                   &
-                        is_level_set,is_zeroeq,is_oneeq,is_twoeq,is_cell_centered,                           &
+                        is_level_set,is_zeroeq,is_oneeq,is_twoeq,is_xall,is_xall_ra,is_cell_centered,        &
                         compute_lambda2,compute_qfactor,compute_liutex, compute_helicity,compute_vorticity,  &
                         compute_LT, compute_div2LT, compute_grad_p,compute_k_ratio,                          &
                         compute_yplus,compute_tau,compute_div_tau,compute_loads,verbose)
@@ -69,6 +69,8 @@ contains
    logical,                intent(in), optional :: is_zeroeq         !< Use *zero* equations turbulence model.
    logical,                intent(in), optional :: is_oneeq          !< Use *one* equations turbulence model.
    logical,                intent(in), optional :: is_twoeq          !< Use *two* equations turbulence model.
+   logical,                intent(in), optional :: is_xall           !< Restart written by Xall (otherwise Xnavis).
+   logical,                intent(in), optional :: is_xall_ra        !< Restart is a file of Xall running averages.
    logical,                intent(in), optional :: is_cell_centered  !< Define variables at cell centers or nodes.
    logical,                intent(in), optional :: compute_lambda2   !< Compute lamda2 field.
    logical,                intent(in), optional :: compute_qfactor   !< Compute qfactor field.
@@ -85,6 +87,8 @@ contains
    logical,                intent(in), optional :: compute_loads     !< Compute loads (forces and torques).
    logical,                intent(in), optional :: verbose           !< Activate verbose mode.
    logical                                      :: verbose_          !< Activate verbose mode, local variable.
+   logical                                      :: is_xall_ra_       !< Running averages, local variable.
+   real(R8P)                                    :: tramin            !< Start time of the running averages.
    integer(I4P)                                 :: file_unit         !< Logical file unit of geo file.
    integer(I4P)                                 :: b                 !< Counter.
 
@@ -96,7 +100,12 @@ contains
       self%blocks_number = blocks_number
       call self%alloc
       open(newunit=file_unit, file=trim(adjustl(filename)), form='unformatted', action='read')
-      read(file_unit) self%time
+      is_xall_ra_ = .false. ; if (present(is_xall_ra)) is_xall_ra_ = is_xall_ra
+      if (is_xall_ra_) then ! Xall running averages: tramin, t, dt, nsample
+         read(file_unit) tramin, self%time
+      else
+         read(file_unit) self%time
+      endif
       do b=1, self%blocks_number
          call self%blocks(b)%load_dimensions(file_unit=file_unit,                 &
                                              is_level_set=is_level_set,           &
@@ -122,6 +131,8 @@ contains
                                            grd=file_grd%blocks(b),            &
                                            icc=file_icc%blocks(b),            &
                                            is_cell_centered=is_cell_centered, &
+                                           is_xall=is_xall,                   &
+                                           is_xall_ra=is_xall_ra,             &
                                            patch=patch,                       &
                                            RE=RE, rFR2=rFR2, zfs=zfs)
       enddo

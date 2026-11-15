@@ -416,6 +416,8 @@ contains
                                     is_zeroeq=ui%is_zeroeq,                 &
                                     is_oneeq=ui%is_oneeq,                   &
                                     is_twoeq=ui%is_twoeq,                   &
+                                    is_xall=ui%is_xall_rst,                 &
+                                    is_xall_ra=ui%is_xall_ra_rst,           &
                                     is_cell_centered=ui%is_cell_centered,   &
                                     compute_lambda2=ui%compute_lambda2,     &
                                     compute_qfactor=ui%compute_qfactor,     &

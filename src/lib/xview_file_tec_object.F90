@@ -121,6 +121,7 @@ contains
             call add_var('LT_31') ; call add_var('LT_32') ; call add_var('LT_33')
          endif
          if (allocated(sol%div2LT                              )) call add_var('div2LT')
+         if (allocated(sol%k_res                               )) call add_var('k_res')
       endif
    endif
    allocate(self%tecnull(  1:self%nvar))
@@ -304,6 +305,8 @@ contains
                endif
                if (allocated(sol%div2LT)) &
                   error = tec_var(n=ncn, var=sol%div2LT(i1:i2,j1:j2,k1:k2), d=1_I4P)
+               if (allocated(sol%k_res)) &
+                  error = tec_var(n=ncn, var=sol%k_res(i1:i2,j1:j2,k1:k2), d=1_I4P)
             endif
          endif
       endassociate

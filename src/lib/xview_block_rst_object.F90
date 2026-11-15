@@ -35,6 +35,7 @@ type :: block_rst_object
    real(R8P),    allocatable :: LT(:,:,:,:,:)                               !< Lighthill tensor.
    real(R8P),    allocatable :: div2LT(:,:,:)                               !< Double divergence of Lighthill tensor.
    real(R8P),    allocatable :: k_ratio(:,:,:)                              !< Kinetic energies ratio.
+   real(R8P),    allocatable :: k_res(:,:,:)                                !< Resolved fluctuation energy (running averages).
    real(R8P),    allocatable :: yplus(:,:,:)                                !< Estimation of y+.
    type(vector), allocatable :: tau(:,:,:)                                  !< Tau wall.
    real(R8P),    allocatable :: div_tau(:,:,:)                              !< Divergence of Tau wall.
@@ -115,6 +116,7 @@ contains
    if (allocated(self%LT))                                   deallocate(self%LT)
    if (allocated(self%div2LT))                               deallocate(self%div2LT)
    if (allocated(self%k_ratio))                              deallocate(self%k_ratio)
+   if (allocated(self%k_res))                                deallocate(self%k_res)
    if (allocated(self%yplus))                                deallocate(self%yplus)
    if (allocated(self%tau))                                  deallocate(self%tau)
    if (allocated(self%div_tau))                              deallocate(self%div_tau)
@@ -1086,6 +1088,9 @@ contains
    if (allocated(self%k_ratio)) then
       tmp = self%k_ratio ; call interpolate_R8P(var=tmp, vari=self%k_ratio)
    endif
+   if (allocated(self%k_res)) then
+      tmp = self%k_res ; call interpolate_R8P(var=tmp, vari=self%k_res)
+   endif
    contains
       subroutine interpolate_R8P(var, vari)
       !< Interpolate a real(R8P) scalar: node i (0..N) is the mean of cells i..i+1 (cell i spans nodes i-1..i).
@@ -1162,7 +1167,7 @@ contains
    endif
    endsubroutine load_dimensions
 
-   subroutine load_solution(self, file_unit, grd, icc, is_cell_centered, patch, RE, rFR2, zfs)
+   subroutine load_solution(self, file_unit, grd, icc, is_cell_centered, is_xall, is_xall_ra, patch, RE, rFR2, zfs)
    !< Load block solution from file.
    !<
    !< @note The solution file must be already open and the current record-index must be at the proper block nodes record.
@@ -1171,15 +1176,71 @@ contains
    type(block_grd_object),  intent(in)           :: grd               !< Block grd data.
    type(block_icc_object),  intent(in)           :: icc               !< Block icc data.
    logical,                 intent(in), optional :: is_cell_centered  !< Define variables at cell centers or nodes.
+   logical,                 intent(in), optional :: is_xall           !< Restart written by Xall (otherwise Xnavis).
+   logical,                 intent(in), optional :: is_xall_ra        !< Restart is a file of Xall running averages.
    integer(I4P),            intent(in), optional :: patch             !< Patch boundary conditions.
    real(R8P),               intent(in), optional :: RE                !< Reynolds number.
    real(R8P),               intent(in), optional :: rFR2              !< 1/(Froude number)^2.
    real(R8P),               intent(in), optional :: zfs               !< Z quote of free surface.
+   logical                                       :: is_xall_          !< Restart written by Xall, local variable.
+   logical                                       :: is_xall_ra_       !< Running averages, local variable.
+   real(R8P), allocatable                        :: m2(:,:,:)         !< Second moment buffer (running averages).
+   real(R8P), allocatable                        :: chi(:,:,:)        !< nu~/nu (running averages).
    integer(I4P)                                  :: i                 !< Counter.
    integer(I4P)                                  :: j                 !< Counter.
    integer(I4P)                                  :: k                 !< Counter.
 
+   is_xall_ = .false. ; if (present(is_xall)) is_xall_ = is_xall
+   is_xall_ra_ = .false. ; if (present(is_xall_ra)) is_xall_ra_ = is_xall_ra
    associate(Ni => self%Ni, Nj => self%Nj, Nk => self%Nk, gc => self%gc)
+   if (is_xall_) then
+      ! Xall layout (memsol.F90): p, u, v, w, [nu~ | k, eps], [level set], [effective viscosity], cells 1-gc..N+gc;
+      ! the previous time level that follows is not read
+      read(file_unit)(((self%pressure(i, j, k)  , i=1-gc(1), Ni+gc(2)), j=1-gc(3), Nj+gc(4)), k=1-gc(5), Nk+gc(6))
+      read(file_unit)(((self%momentum(i, j, k)%x, i=1-gc(1), Ni+gc(2)), j=1-gc(3), Nj+gc(4)), k=1-gc(5), Nk+gc(6))
+      read(file_unit)(((self%momentum(i, j, k)%y, i=1-gc(1), Ni+gc(2)), j=1-gc(3), Nj+gc(4)), k=1-gc(5), Nk+gc(6))
+      read(file_unit)(((self%momentum(i, j, k)%z, i=1-gc(1), Ni+gc(2)), j=1-gc(3), Nj+gc(4)), k=1-gc(5), Nk+gc(6))
+      ! turbulence variables: last entries of the conservative vector q, so they precede the second moments (RA)
+      if (self%is_oneeq) &
+         read(file_unit)(((self%turbulent_viscosity(i, j, k), i=1-gc(1), Ni+gc(2)), j=1-gc(3), Nj+gc(4)), k=1-gc(5), Nk+gc(6))
+      if (self%is_twoeq) then
+         read(file_unit)(((self%turbulent_kinetic_energy(i, j, k), i=1-gc(1), Ni+gc(2)), j=1-gc(3), Nj+gc(4)), k=1-gc(5), Nk+gc(6))
+         read(file_unit)(((self%turbulent_kinetic_energy_dissipation(i, j, k), &
+                           i=1-gc(1), Ni+gc(2)), j=1-gc(3), Nj+gc(4)), k=1-gc(5), Nk+gc(6))
+      endif
+      if (is_xall_ra_) then
+         ! running averages (running_average.F90): after the means of q, the raw second moments <uu>, <vv>, <ww>, <uv>,
+         ! <uw>, <vw>; resolved fluctuation energy k_res = (<uu>-<u>^2 + <vv>-<v>^2 + <ww>-<w>^2)/2
+         if (self%is_level_set) error stop 'error: Xall running averages hold no level set (it is not averaged)'
+         allocate(m2(1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
+         allocate(self%k_res(1-gc(1):Ni+gc(2), 1-gc(3):Nj+gc(4), 1-gc(5):Nk+gc(6)))
+         read(file_unit) m2 ; self%k_res = 0.5_R8P * (m2 - self%momentum%x**2)
+         read(file_unit) m2 ; self%k_res = self%k_res + 0.5_R8P * (m2 - self%momentum%y**2)
+         read(file_unit) m2 ; self%k_res = self%k_res + 0.5_R8P * (m2 - self%momentum%z**2)
+         read(file_unit) ; read(file_unit) ; read(file_unit) ! <uv>, <uw>, <vw>: not used
+         ! the effective viscosity is not averaged by Xall: with Spalart-Allmaras it is rebuilt from the mean nu~ as
+         ! (1 + chi fv1)/RE, chi = nu~ RE; the zero- and two-equation models need data the file does not hold (wall
+         ! distance, damping functions), so their viscosity is dropped rather than left undefined
+         if (allocated(self%viscosity)) then
+            if (self%is_oneeq) then
+               if (.not.present(RE)) error stop 'error: Xall running averages need RE (effective viscosity from nu~)'
+               if (RE <= 0._R8P) error stop 'error: Xall running averages need RE > 0 (effective viscosity from nu~)'
+               chi = max(self%turbulent_viscosity, 0._R8P) * RE
+               self%viscosity = (1._R8P + chi * chi**3 / (chi**3 + 7.1_R8P**3)) / RE
+            else
+               deallocate(self%viscosity)
+            endif
+         endif
+      else
+         if (self%is_level_set) then ! Xall writes one level-set field: it is used also as zero level set
+            read(file_unit)(((self%level_set(i, j, k), i=1-gc(1), Ni+gc(2)), j=1-gc(3), Nj+gc(4)), k=1-gc(5), Nk+gc(6))
+            self%level_set_zero = self%level_set
+         endif
+         if (self%is_zeroeq.or.self%is_oneeq.or.self%is_twoeq) then
+            read(file_unit)(((self%viscosity(i, j, k), i=1-gc(1), Ni+gc(2)), j=1-gc(3), Nj+gc(4)), k=1-gc(5), Nk+gc(6))
+         endif
+      endif
+   else
       read(file_unit)(((self%momentum(i, j, k)%x, i=0, Ni + 1), j=0, Nj + 1), k=0, Nk + 1)
       read(file_unit)(((self%momentum(i, j, k)%y, i=0, Ni + 1), j=0, Nj + 1), k=0, Nk + 1)
       read(file_unit)(((self%momentum(i, j, k)%z, i=0, Ni + 1), j=0, Nj + 1), k=0, Nk + 1)
@@ -1196,6 +1257,7 @@ contains
          read(file_unit)(((self%turbulent_kinetic_energy(i, j, k), i=0, Ni + 1), j=0, Nj + 1), k=0, Nk + 1)
          read(file_unit)(((self%turbulent_kinetic_energy_dissipation(i, j, k), i=0, Ni + 1), j=0, Nj + 1), k=0, Nk + 1)
       endif
+   endif
    endassociate
    self%is_loaded = .true.
    call self%compute_aux(grd=grd, icc=icc, patch=patch, RE=RE, rFR2=rFR2, zfs=zfs)
@@ -1243,6 +1305,8 @@ contains
          write(file_unit)(((self%level_set_zero(i, j, k), i=0, Ni + 1), j=0, Nj + 1), k=0, Nk + 1)
       endif
       if (self%is_zeroeq.or.self%is_oneeq.or.self%is_twoeq) then
+         if (.not.allocated(self%viscosity)) & ! dropped by the reader of Xall running averages (zero/two-equation)
+            error stop 'error: block has no viscosity field, it cannot be saved as an Xnavis restart'
          write(file_unit)(((self%viscosity(i, j, k), i=0, Ni + 1), j=0, Nj + 1), k=0, Nk + 1)
       endif
       if (self%is_oneeq) write(file_unit)(((self%turbulent_viscosity(i, j, k), i=0, Ni + 1), j=0, Nj + 1), k=0, Nk + 1)
